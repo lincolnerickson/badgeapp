@@ -213,11 +213,11 @@ button.danger:hover:not(:disabled) {
 
 #field-panel {
     width: 290px;
-    min-width: 290px;
+    min-width: 220px;
     background: var(--panel-bg);
     border-left: 1px solid var(--border);
     overflow-y: auto;
-    flex-shrink: 0;
+    flex-shrink: 1;
 }
 
 .panel-section {
