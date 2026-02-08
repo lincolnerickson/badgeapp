@@ -212,16 +212,33 @@ button.danger:hover:not(:disabled) {
 /* ---- Panel resizer ---- */
 
 #panel-resizer {
-    width: 5px;
+    width: 8px;
     cursor: col-resize;
-    background: var(--border);
+    background: #b0b0b0;
     flex-shrink: 0;
     transition: background 0.15s;
+    position: relative;
+}
+
+#panel-resizer::after {
+    content: '\2807';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #666;
+    font-size: 14px;
+    line-height: 1;
 }
 
 #panel-resizer:hover,
 body.resizing #panel-resizer {
     background: var(--accent);
+}
+
+#panel-resizer:hover::after,
+body.resizing #panel-resizer::after {
+    color: #fff;
 }
 
 body.resizing {

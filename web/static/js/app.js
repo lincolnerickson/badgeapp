@@ -11,16 +11,16 @@ const App = {
     async init() {
         Toast.init();
 
-        // Load initial state from server
-        await this.loadConfig();
-        await this.loadCSVInfo();
-        this.loadFonts(); // async, don't await
-
-        // Initialize modules
+        // Initialize modules (before loading data, since loaders use them)
         BadgeEditor.init();
         FieldPanel.init();
         NavBar.init();
         Dialogs.init();
+
+        // Load initial state from server
+        await this.loadConfig();
+        await this.loadCSVInfo();
+        this.loadFonts(); // async, don't await
 
         // Wire toolbar buttons
         this.bindToolbar();
@@ -62,8 +62,16 @@ const App = {
     // --- Panel resizer ---
 
     initPanelResizer() {
-        const resizer = document.getElementById('panel-resizer');
         const panel = document.getElementById('field-panel');
+        if (!panel) return;
+
+        // Ensure resizer element exists (create if missing from cached HTML)
+        let resizer = document.getElementById('panel-resizer');
+        if (!resizer) {
+            resizer = document.createElement('div');
+            resizer.id = 'panel-resizer';
+            panel.parentNode.insertBefore(resizer, panel);
+        }
         let startX, startWidth;
 
         resizer.addEventListener('mousedown', (e) => {
