@@ -25,6 +25,7 @@ const App = {
         // Wire toolbar buttons
         this.bindToolbar();
         this.bindKeyboard();
+        this.initPanelResizer();
 
         // Update UI state
         this.updateUIState();
@@ -56,6 +57,34 @@ const App = {
         } catch (e) {
             console.error('Failed to load fonts:', e);
         }
+    },
+
+    // --- Panel resizer ---
+
+    initPanelResizer() {
+        const resizer = document.getElementById('panel-resizer');
+        const panel = document.getElementById('field-panel');
+        let startX, startWidth;
+
+        resizer.addEventListener('mousedown', (e) => {
+            startX = e.clientX;
+            startWidth = panel.offsetWidth;
+            document.body.classList.add('resizing');
+
+            const onMouseMove = (e) => {
+                const newWidth = startWidth - (e.clientX - startX);
+                panel.style.width = Math.max(180, Math.min(500, newWidth)) + 'px';
+            };
+
+            const onMouseUp = () => {
+                document.body.classList.remove('resizing');
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+            };
+
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        });
     },
 
     // --- Toolbar ---

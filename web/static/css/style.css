@@ -209,6 +209,27 @@ button.danger:hover:not(:disabled) {
     border-color: var(--accent);
 }
 
+/* ---- Panel resizer ---- */
+
+#panel-resizer {
+    width: 5px;
+    cursor: col-resize;
+    background: var(--border);
+    flex-shrink: 0;
+    transition: background 0.15s;
+}
+
+#panel-resizer:hover,
+body.resizing #panel-resizer {
+    background: var(--accent);
+}
+
+body.resizing {
+    cursor: col-resize;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
 /* ---- Field panel ---- */
 
 #field-panel {
