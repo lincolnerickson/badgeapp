@@ -46,6 +46,11 @@ def discover_fonts() -> Dict[str, str]:
     fonts: Dict[str, str] = {}
     font_dirs = []
 
+    # Project-bundled fonts (fonts/ directory next to this file's parent)
+    project_fonts = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "fonts")
+    if os.path.isdir(project_fonts):
+        font_dirs.append(project_fonts)
+
     if sys.platform == "win32":
         # Windows system fonts
         windir = os.environ.get("WINDIR", r"C:\Windows")
