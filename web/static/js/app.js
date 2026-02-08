@@ -189,9 +189,13 @@ const App = {
 
     async saveCSV() {
         if (!this.csvInfo?.loaded) return;
+        const defaultName = (this.csvInfo.filename || 'badges.csv').replace(/\.csv$/i, '');
+        const filename = prompt('Save CSV as:', defaultName);
+        if (!filename) return; // user cancelled
+        const safeName = filename.endsWith('.csv') ? filename : filename + '.csv';
         try {
             const blob = await API.downloadCSV();
-            API.downloadBlob(blob, this.csvInfo.filename || 'badges.csv');
+            API.downloadBlob(blob, safeName);
             Toast.success('CSV downloaded');
         } catch (e) {
             Toast.error('Failed to save CSV');
