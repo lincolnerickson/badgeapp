@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Badge Designer</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- Toolbar -->
+    <div id="toolbar">
+        <div class="toolbar-group">
+            <button id="btn-open-image" title="Open background image (Ctrl+I)">Open Image</button>
+            <button id="btn-open-csv" title="Open CSV file (Ctrl+O)">Open CSV</button>
+            <button id="btn-save-csv" title="Save CSV (Ctrl+S)" disabled>Save CSV</button>
+            <span class="toolbar-sep"></span>
+            <button id="btn-load-template" title="Load template">Load Template</button>
+            <button id="btn-save-template" title="Save template">Save Template</button>
+        </div>
+        <div class="toolbar-group">
+            <button id="btn-manual-entry" title="Add badge manually (Ctrl+N)" disabled>Manual Entry</button>
+            <button id="btn-edit-badge" title="Edit current badge (Ctrl+E)" disabled>Edit</button>
+            <button id="btn-delete-badge" title="Delete current badge" disabled>Delete</button>
+            <span class="toolbar-sep"></span>
+            <button id="btn-export-pdf" class="accent" title="Export all badges to PDF" disabled>Export PDF</button>
+            <button id="btn-print-badge" title="Print current badge" disabled>Print Badge</button>
+        </div>
+    </div>
+
+    <!-- Main content area -->
+    <div id="main">
+        <!-- Badge editor area -->
+        <div id="editor-area">
+            <div id="canvas-container">
+                <svg id="badge-svg" xmlns="http://www.w3.org/2000/svg">
+                    <rect id="badge-bg-rect" width="100%" height="100%" fill="#ffffff"/>
+                    <image id="badge-bg-image" width="100%" height="100%" style="display:none"/>
+                    <g id="fields-group"></g>
+                </svg>
+                <img id="preview-img" alt="Badge preview" style="display:none"/>
+            </div>
+            <div id="editor-controls">
+                <label id="preview-toggle-label">
+                    <input type="checkbox" id="preview-toggle"> Show rendered preview
+                </label>
+                <span id="badge-size-info"></span>
+            </div>
+
+            <!-- Navigation bar -->
+            <div id="nav-bar">
+                <button id="btn-prev" title="Previous badge (Left arrow)" disabled>&lt;</button>
+                <span id="row-indicator">No CSV loaded</span>
+                <button id="btn-next" title="Next badge (Right arrow)" disabled>&gt;</button>
+                <span class="toolbar-sep"></span>
+                <input type="text" id="search-input" placeholder="Search..." disabled>
+                <button id="btn-search" title="Find (Ctrl+F)" disabled>Find</button>
+                <button id="btn-search-prev" title="Previous match" disabled>Prev</button>
+                <button id="btn-search-next" title="Next match" disabled>Next</button>
+            </div>
+        </div>
+
+        <!-- Field panel -->
+        <div id="field-panel">
+            <div class="panel-section">
+                <h3>Add Field</h3>
+                <div class="panel-row">
+                    <select id="csv-column-select" disabled>
+                        <option value="">-- CSV Column --</option>
+                    </select>
+                    <button id="btn-add-field" disabled>Add</button>
+                </div>
+            </div>
+
+            <div class="panel-section">
+                <h3>Fields</h3>
+                <div id="field-list" class="field-list">
+                    <div class="empty-msg">No fields added</div>
+                </div>
+            </div>
+
+            <div id="field-props" class="panel-section" style="display:none">
+                <h3>Properties</h3>
+                <div class="prop-grid">
+                    <label>X</label>
+                    <input type="number" id="prop-x" step="1">
+
+                    <label>Y</label>
+                    <input type="number" id="prop-y" step="1">
+
+                    <label>Font</label>
+                    <select id="prop-font"></select>
+
+                    <label>Size</label>
+                    <input type="number" id="prop-size" min="6" max="200" step="1">
+
+                    <label>Color</label>
+                    <input type="color" id="prop-color">
+
+                    <label>Bold</label>
+                    <input type="checkbox" id="prop-bold">
+
+                    <label>Italic</label>
+                    <input type="checkbox" id="prop-italic">
+
+                    <label>Align</label>
+                    <select id="prop-align">
+                        <option value="left">Left</option>
+                        <option value="center">Center</option>
+                        <option value="right">Right</option>
+                    </select>
+
+                    <label>Max Width</label>
+                    <input type="number" id="prop-max-width" min="0" step="10">
+                </div>
+                <button id="btn-apply-props" class="accent" style="margin-top:8px;width:100%">Apply Changes</button>
+                <button id="btn-delete-field" style="margin-top:4px;width:100%">Delete Field</button>
+            </div>
+
+            <!-- PDF Settings -->
+            <div class="panel-section">
+                <h3>PDF Layout</h3>
+                <div class="prop-grid">
+                    <label>Columns</label>
+                    <input type="number" id="pdf-cols" min="1" max="10" value="2">
+
+                    <label>Rows</label>
+                    <input type="number" id="pdf-rows" min="1" max="20" value="4">
+
+                    <label>Page</label>
+                    <select id="pdf-page-size">
+                        <option value="letter">Letter</option>
+                        <option value="A4">A4</option>
+                    </select>
+
+                    <label>Margin (mm)</label>
+                    <input type="number" id="pdf-margin" min="0" max="50" step="0.5" value="10">
+
+                    <label>Spacing (mm)</label>
+                    <input type="number" id="pdf-spacing" min="0" max="20" step="0.5" value="2">
+                </div>
+                <button id="btn-apply-pdf" style="margin-top:8px;width:100%">Apply PDF Settings</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status bar -->
+    <div id="status-bar">
+        <span id="status-image">No image loaded</span>
+        <span class="status-sep">|</span>
+        <span id="status-csv">No CSV loaded</span>
+    </div>
+
+    <!-- Toast container -->
+    <div id="toast-container"></div>
+
+    <!-- Modal backdrop -->
+    <div id="modal-backdrop" class="hidden"></div>
+    <div id="modal-container" class="hidden"></div>
+
+    <!-- Hidden file inputs -->
+    <input type="file" id="file-image" accept="image/*" style="display:none">
+    <input type="file" id="file-csv" accept=".csv" style="display:none">
+    <input type="file" id="file-template" accept=".json" style="display:none">
+
+    <!-- Scripts -->
+    <script src="/static/js/toast.js"></script>
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/badge-editor.js"></script>
+    <script src="/static/js/field-panel.js"></script>
+    <script src="/static/js/nav-bar.js"></script>
+    <script src="/static/js/dialogs.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

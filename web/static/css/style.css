@@ -1,0 +1,570 @@
+/* Badge Designer Web - Stylesheet */
+
+:root {
+    --bg: #f0f0f0;
+    --toolbar-bg: #e2e2e2;
+    --accent: #0078D4;
+    --accent-hover: #1a86d9;
+    --accent-fg: #ffffff;
+    --status-bg: #e0e0e0;
+    --canvas-bg: #d6d6d6;
+    --panel-bg: #f5f5f5;
+    --border: #c0c0c0;
+    --text: #1a1a1a;
+    --text-secondary: #555555;
+    --danger: #d32f2f;
+    --danger-hover: #e53935;
+    --success: #2e7d32;
+    --field-selected: #0078D4;
+    --field-hover: #40a0e8;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    font-size: 13px;
+    color: var(--text);
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* ---- Toolbar ---- */
+
+#toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--toolbar-bg);
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.toolbar-group {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.toolbar-sep {
+    display: inline-block;
+    width: 1px;
+    height: 20px;
+    background: var(--border);
+    margin: 0 4px;
+}
+
+/* ---- Buttons ---- */
+
+button {
+    font-family: inherit;
+    font-size: 12px;
+    padding: 5px 12px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    background: var(--bg);
+    color: var(--text);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s;
+}
+
+button:hover:not(:disabled) {
+    background: #d8d8d8;
+}
+
+button:active:not(:disabled) {
+    background: #c8c8c8;
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+button.accent {
+    background: var(--accent);
+    color: var(--accent-fg);
+    border-color: var(--accent);
+    font-weight: 600;
+}
+
+button.accent:hover:not(:disabled) {
+    background: var(--accent-hover);
+}
+
+button.danger {
+    background: var(--danger);
+    color: #fff;
+    border-color: var(--danger);
+}
+
+button.danger:hover:not(:disabled) {
+    background: var(--danger-hover);
+}
+
+/* ---- Main layout ---- */
+
+#main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+#editor-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* ---- Canvas / SVG editor ---- */
+
+#canvas-container {
+    flex: 1;
+    background: var(--canvas-bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+    padding: 12px;
+}
+
+#badge-svg {
+    background: #ffffff;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    max-width: 100%;
+    max-height: 100%;
+}
+
+#preview-img {
+    position: absolute;
+    max-width: calc(100% - 24px);
+    max-height: calc(100% - 24px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+#editor-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 12px;
+    background: var(--toolbar-bg);
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+}
+
+#preview-toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+}
+
+#badge-size-info {
+    color: var(--text-secondary);
+}
+
+/* ---- Navigation bar ---- */
+
+#nav-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: var(--toolbar-bg);
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+}
+
+#row-indicator {
+    min-width: 120px;
+    text-align: center;
+    font-size: 12px;
+}
+
+#search-input {
+    width: 140px;
+    padding: 3px 6px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    font-size: 12px;
+    font-family: inherit;
+}
+
+#search-input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+/* ---- Field panel ---- */
+
+#field-panel {
+    width: 290px;
+    min-width: 290px;
+    background: var(--panel-bg);
+    border-left: 1px solid var(--border);
+    overflow-y: auto;
+    flex-shrink: 0;
+}
+
+.panel-section {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+}
+
+.panel-section h3 {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--accent);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.panel-row {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.panel-row select {
+    flex: 1;
+}
+
+/* ---- Field list ---- */
+
+.field-list {
+    max-height: 180px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    background: #fff;
+}
+
+.field-list .empty-msg {
+    padding: 12px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-style: italic;
+    font-size: 12px;
+}
+
+.field-item {
+    padding: 6px 10px;
+    cursor: pointer;
+    border-bottom: 1px solid #eee;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: background 0.1s;
+}
+
+.field-item:last-child {
+    border-bottom: none;
+}
+
+.field-item:hover {
+    background: #e8f0fe;
+}
+
+.field-item.selected {
+    background: var(--accent);
+    color: #fff;
+}
+
+.field-item .field-name {
+    font-weight: 500;
+}
+
+.field-item .field-info {
+    font-size: 11px;
+    opacity: 0.7;
+}
+
+/* ---- Property grid ---- */
+
+.prop-grid {
+    display: grid;
+    grid-template-columns: 80px 1fr;
+    gap: 4px 8px;
+    align-items: center;
+}
+
+.prop-grid label {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.prop-grid input[type="number"],
+.prop-grid input[type="text"],
+.prop-grid select {
+    width: 100%;
+    padding: 3px 6px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    font-size: 12px;
+    font-family: inherit;
+}
+
+.prop-grid input[type="number"]:focus,
+.prop-grid input[type="text"]:focus,
+.prop-grid select:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.prop-grid input[type="color"] {
+    width: 100%;
+    height: 26px;
+    padding: 1px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.prop-grid input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+}
+
+select {
+    font-family: inherit;
+    font-size: 12px;
+    padding: 3px 6px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    background: #fff;
+}
+
+select:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+/* ---- Status bar ---- */
+
+#status-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 12px;
+    background: var(--status-bg);
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+.status-sep {
+    color: var(--border);
+}
+
+/* ---- Toast notifications ---- */
+
+#toast-container {
+    position: fixed;
+    bottom: 40px;
+    right: 16px;
+    z-index: 10000;
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 8px;
+}
+
+.toast {
+    padding: 10px 16px;
+    border-radius: 4px;
+    font-size: 13px;
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    animation: toast-in 0.25s ease-out;
+    max-width: 360px;
+}
+
+.toast.info {
+    background: #333;
+}
+
+.toast.success {
+    background: var(--success);
+}
+
+.toast.error {
+    background: var(--danger);
+}
+
+.toast.fade-out {
+    animation: toast-out 0.3s ease-in forwards;
+}
+
+@keyframes toast-in {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes toast-out {
+    from { opacity: 1; transform: translateY(0); }
+    to { opacity: 0; transform: translateY(12px); }
+}
+
+/* ---- Modal ---- */
+
+#modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 5000;
+}
+
+#modal-container {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 5001;
+    background: #fff;
+    border-radius: 6px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+    min-width: 380px;
+    max-width: 600px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.hidden {
+    display: none !important;
+}
+
+.modal-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    font-weight: 600;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.modal-header .close-btn {
+    background: none;
+    border: none;
+    font-size: 18px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    padding: 0 4px;
+    line-height: 1;
+}
+
+.modal-header .close-btn:hover {
+    color: var(--text);
+}
+
+.modal-body {
+    padding: 16px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.modal-footer {
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+/* Modal form elements */
+
+.form-group {
+    margin-bottom: 12px;
+}
+
+.form-group label {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    margin-bottom: 4px;
+    color: var(--text-secondary);
+}
+
+.form-group input,
+.form-group select {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    font-size: 13px;
+    font-family: inherit;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+/* Progress bar */
+
+.progress-bar {
+    width: 100%;
+    height: 20px;
+    background: var(--bg);
+    border-radius: 3px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+}
+
+.progress-bar .progress-fill {
+    height: 100%;
+    background: var(--accent);
+    transition: width 0.3s ease;
+    border-radius: 2px;
+}
+
+.progress-text {
+    text-align: center;
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+/* SVG field elements */
+
+.svg-field-text {
+    cursor: move;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.svg-field-text:hover {
+    filter: drop-shadow(0 0 3px var(--field-hover));
+}
+
+.svg-field-text.selected {
+    filter: drop-shadow(0 0 3px var(--field-selected));
+}
+
+/* Search results highlight */
+
+.search-match {
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: 2px;
+    padding: 0 2px;
+}
