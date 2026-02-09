@@ -72,8 +72,8 @@ const Dialogs = {
             const defaultVal = isBadgeNum && nextBadge ? nextBadge : '';
             formHTML += `
                 <div class="form-group">
-                    <label>${h}</label>
-                    <input type="text" id="manual-${CSS.escape(h)}" value="${defaultVal}" data-column="${h}">
+                    <label>${escapeHTML(h)}</label>
+                    <input type="text" id="manual-${CSS.escape(h)}" value="${defaultVal}" data-column="${escapeHTML(h)}">
                 </div>
             `;
         });
@@ -142,11 +142,11 @@ const Dialogs = {
         const headers = App.csvInfo.headers;
         let formHTML = '';
         headers.forEach(h => {
-            const val = (rowData[h] || '').replace(/"/g, '&quot;');
+            const val = escapeHTML(rowData[h] || '');
             formHTML += `
                 <div class="form-group">
-                    <label>${h}</label>
-                    <input type="text" id="edit-${CSS.escape(h)}" value="${val}" data-column="${h}">
+                    <label>${escapeHTML(h)}</label>
+                    <input type="text" id="edit-${CSS.escape(h)}" value="${val}" data-column="${escapeHTML(h)}">
                 </div>
             `;
         });

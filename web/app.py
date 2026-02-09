@@ -9,10 +9,14 @@ import threading
 from io import BytesIO
 from typing import Optional
 
+from urllib.parse import urlparse
+
 from flask import (
     Flask, render_template, request, jsonify, send_file, abort
 )
 from PIL import Image
+
+Image.MAX_IMAGE_PIXELS = 25_000_000
 
 # Add parent directory so we can import shared modules
 app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -27,7 +31,27 @@ from utils.fonts import get_font_families
 from web.state import state
 
 app = Flask(__name__)
+app.secret_key = os.urandom(32)
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50 MB upload limit
+
+ALLOWED_HOSTS = {"localhost", "127.0.0.1"}
+
+
+@app.before_request
+def csrf_check():
+    """Reject non-GET/HEAD/OPTIONS requests with a foreign Origin or Referer."""
+    if request.method in ("GET", "HEAD", "OPTIONS"):
+        return
+    origin = request.headers.get("Origin") or request.headers.get("Referer")
+    if origin:
+        host = urlparse(origin).hostname
+        if host not in ALLOWED_HOSTS:
+            return jsonify(error="Forbidden: cross-origin request"), 403
+
+FIELD_ALLOWED_KEYS = {
+    "x", "y", "font_family", "font_size", "font_color",
+    "bold", "italic", "alignment", "max_width",
+}
 
 # Temp directory for uploads and exports
 UPLOAD_DIR = os.path.join(tempfile.gettempdir(), "badge_designer_web")
@@ -56,7 +80,11 @@ def upload_image():
         return jsonify(error="Empty filename"), 400
 
     try:
-        img = Image.open(f.stream).convert("RGBA")
+        img = Image.open(f.stream)
+        pixels = img.width * img.height
+        if pixels > Image.MAX_IMAGE_PIXELS:
+            return jsonify(error=f"Image too large ({pixels:,} pixels, max {Image.MAX_IMAGE_PIXELS:,})"), 400
+        img = img.convert("RGBA")
     except Exception as e:
         return jsonify(error=f"Invalid image: {e}"), 400
 
@@ -182,7 +210,7 @@ def get_config():
 
 @app.route("/api/config", methods=["PUT"])
 def update_config():
-    data = request.get_json(force=True)
+    data = request.get_json()
     for key in ("badges_per_row", "badges_per_col", "page_size",
                 "margin_mm", "spacing_mm", "badge_width", "badge_height"):
         if key in data:
@@ -197,7 +225,7 @@ def get_fields():
 
 @app.route("/api/fields", methods=["POST"])
 def add_field():
-    data = request.get_json(force=True)
+    data = request.get_json()
     fp = FieldPlacement.from_dict(data)
     state.config.fields.append(fp)
     idx = len(state.config.fields) - 1
@@ -208,10 +236,10 @@ def add_field():
 def update_field(idx):
     if idx < 0 or idx >= len(state.config.fields):
         return jsonify(error="Invalid field index"), 404
-    data = request.get_json(force=True)
+    data = request.get_json()
     fp = state.config.fields[idx]
     for key, val in data.items():
-        if hasattr(fp, key):
+        if key in FIELD_ALLOWED_KEYS:
             setattr(fp, key, val)
     return jsonify(ok=True, field=fp.to_dict())
 
@@ -261,7 +289,7 @@ def get_row(idx):
 
 @app.route("/api/csv/row", methods=["POST"])
 def add_row():
-    data = request.get_json(force=True)
+    data = request.get_json()
     row = data.get("row", {})
     # Ensure all headers exist in the new row
     for h in state.csv_data.headers:
@@ -280,7 +308,7 @@ def add_row():
 def update_row(idx):
     if idx < 0 or idx >= state.csv_data.row_count:
         return jsonify(error="Row index out of range"), 404
-    data = request.get_json(force=True)
+    data = request.get_json()
     row = data.get("row", {})
     for key, val in row.items():
         state.csv_data.rows[idx][key] = val
@@ -383,7 +411,8 @@ def start_pdf_export():
         "path": output_path,
         "error": None,
     }
-    state.export_tasks[task_id] = task
+    with state.lock:
+        state.export_tasks[task_id] = task
 
     # Capture current state for the thread
     config = BadgeConfig.from_dict(state.config.to_dict())
@@ -393,16 +422,22 @@ def start_pdf_export():
     bg = state.background.copy() if state.background else None
 
     def run_export():
+        def on_progress(n):
+            with state.lock:
+                task["progress"] = n
+
         try:
             export_pdf(
                 config, csv_data_copy, output_path,
                 background=bg,
-                on_progress=lambda n: task.update(progress=n),
+                on_progress=on_progress,
             )
-            task["status"] = "done"
+            with state.lock:
+                task["status"] = "done"
         except Exception as e:
-            task["status"] = "error"
-            task["error"] = str(e)
+            with state.lock:
+                task["status"] = "error"
+                task["error"] = str(e)
 
     t = threading.Thread(target=run_export, daemon=True)
     t.start()
@@ -412,15 +447,16 @@ def start_pdf_export():
 
 @app.route("/api/export-pdf/status/<task_id>")
 def pdf_export_status(task_id):
-    task = state.export_tasks.get(task_id)
-    if not task:
-        return jsonify(error="Unknown task"), 404
-    return jsonify(
-        status=task["status"],
-        progress=task["progress"],
-        total=task["total"],
-        error=task["error"],
-    )
+    with state.lock:
+        task = state.export_tasks.get(task_id)
+        if not task:
+            return jsonify(error="Unknown task"), 404
+        return jsonify(
+            status=task["status"],
+            progress=task["progress"],
+            total=task["total"],
+            error=task["error"],
+        )
 
 
 @app.route("/api/export-pdf/download/<task_id>")
@@ -486,4 +522,4 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     debug = os.environ.get("FLASK_DEBUG", "0") == "1"
     print(f"Badge Designer Web - http://localhost:{port}")
-    app.run(host="0.0.0.0", port=port, debug=debug)
+    app.run(host="127.0.0.1", port=port, debug=debug)
