@@ -29,6 +29,9 @@ const App = {
 
         // Update UI state
         this.updateUIState();
+
+        // Restore session: background image, fields, status bar
+        await this.restoreSession();
     },
 
     async loadConfig() {
@@ -289,6 +292,32 @@ const App = {
         if (!this.csvInfo?.loaded) return;
         // Download single-badge PDF for printing via OS dialog
         API.downloadFile(API.getSinglePDFURL(this.currentRow), `badge_${this.currentRow + 1}.pdf`);
+    },
+
+    // --- Session restore ---
+
+    async restoreSession() {
+        // Restore background image if server has one
+        try {
+            const resp = await fetch('/api/background-info');
+            const bgInfo = await resp.json();
+            if (bgInfo.has_background) {
+                BadgeEditor.setBackground(API.getBackgroundURL());
+                document.getElementById('status-image').textContent =
+                    `Image: ${bgInfo.filename} (${this.config.badge_width} x ${this.config.badge_height})`;
+            }
+        } catch (e) {
+            console.error('Failed to restore background:', e);
+        }
+
+        // Restore CSV status bar
+        if (this.csvInfo?.loaded) {
+            document.getElementById('status-csv').textContent =
+                `CSV: ${this.csvInfo.filename} (${this.csvInfo.row_count} rows)`;
+        }
+
+        // Render fields on the canvas
+        await this.refreshEditor();
     },
 
     // --- State management ---

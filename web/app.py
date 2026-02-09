@@ -73,6 +73,14 @@ def upload_image():
     )
 
 
+@app.route("/api/background-info")
+def background_info():
+    return jsonify(
+        has_background=state.background is not None,
+        filename=state.background_filename,
+    )
+
+
 @app.route("/api/background-image")
 def background_image():
     if state.background is None:
