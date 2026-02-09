@@ -62,8 +62,8 @@ const FieldPanel = {
             const item = document.createElement('div');
             item.className = 'field-item' + (idx === this.selectedIndex ? ' selected' : '');
             item.innerHTML = `
-                <span class="field-name">${f.csv_column}</span>
-                <span class="field-info">${f.font_family} ${f.font_size}px</span>
+                <span class="field-name">${escapeHTML(f.csv_column)}</span>
+                <span class="field-info">${escapeHTML(f.font_family)} ${f.font_size}px</span>
             `;
             item.addEventListener('click', () => this.select(idx));
             list.appendChild(item);

@@ -49,4 +49,4 @@ echo.
 :: Open browser after a short delay (gives Flask time to start)
 start "" /b cmd /c "timeout /t 2 /nobreak >nul && start http://localhost:5000"
 
-"%PYTHON%" -m flask --app web.app run --host 0.0.0.0 --port 5000
+"%PYTHON%" -m flask --app web.app run --host 127.0.0.1 --port 5000
