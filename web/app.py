@@ -6,10 +6,10 @@ import json
 import uuid
 import tempfile
 import threading
+import secrets
+import webbrowser
 from io import BytesIO
 from typing import Optional
-
-from urllib.parse import urlparse
 
 from flask import (
     Flask, render_template, request, jsonify, send_file, abort
@@ -34,19 +34,19 @@ app = Flask(__name__)
 app.secret_key = os.urandom(32)
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50 MB upload limit
 
-ALLOWED_HOSTS = {"localhost", "127.0.0.1"}
+APP_TOKEN = secrets.token_hex(32)
 
 
 @app.before_request
-def csrf_check():
-    """Reject non-GET/HEAD/OPTIONS requests with a foreign Origin or Referer."""
-    if request.method in ("GET", "HEAD", "OPTIONS"):
+def auth_check():
+    """Reject requests without a valid app token."""
+    if request.path.startswith('/static/'):
         return
-    origin = request.headers.get("Origin") or request.headers.get("Referer")
-    if origin:
-        host = urlparse(origin).hostname
-        if host not in ALLOWED_HOSTS:
-            return jsonify(error="Forbidden: cross-origin request"), 403
+    token = request.headers.get('X-App-Token') or request.args.get('token')
+    if token != APP_TOKEN:
+        if request.path == '/':
+            return "Access denied. Use the URL printed in the console.", 403
+        return jsonify(error="Forbidden"), 403
 
 FIELD_ALLOWED_KEYS = {
     "x", "y", "font_family", "font_size", "font_color",
@@ -64,7 +64,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return render_template("index.html", app_token=APP_TOKEN)
 
 
 # ---------------------------------------------------------------------------
@@ -521,5 +521,7 @@ def export_single_image(row_idx):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     debug = os.environ.get("FLASK_DEBUG", "0") == "1"
-    print(f"Badge Designer Web - http://localhost:{port}")
+    url = f"http://localhost:{port}?token={APP_TOKEN}"
+    print(f"Badge Designer Web - {url}")
+    threading.Timer(1.5, webbrowser.open, args=[url]).start()
     app.run(host="127.0.0.1", port=port, debug=debug)

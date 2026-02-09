@@ -2,7 +2,7 @@
 title Badge Designer Web
 echo Starting Badge Designer Web...
 echo.
-echo Once the server starts, your browser will open to http://localhost:5000
+echo Once the server starts, your browser will open automatically.
 echo Press Ctrl+C to stop the server.
 echo.
 
@@ -46,7 +46,4 @@ goto :eof
 echo Using: %PYTHON%
 echo.
 
-:: Open browser after a short delay (gives Flask time to start)
-start "" /b cmd /c "timeout /t 2 /nobreak >nul && start http://localhost:5000"
-
-"%PYTHON%" -m flask --app web.app run --host 127.0.0.1 --port 5000
+"%PYTHON%" web/app.py
