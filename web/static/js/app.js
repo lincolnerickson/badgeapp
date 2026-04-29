@@ -9,6 +9,7 @@ const App = {
     fonts: [],
 
     async init() {
+        API.init();
         Toast.init();
 
         // Initialize modules (before loading data, since loaders use them)
@@ -299,8 +300,7 @@ const App = {
     async restoreSession() {
         // Restore background image if server has one
         try {
-            const resp = await fetch('/api/background-info');
-            const bgInfo = await resp.json();
+            const bgInfo = await API.getBackgroundInfo();
             if (bgInfo.has_background) {
                 BadgeEditor.setBackground(API.getBackgroundURL());
                 document.getElementById('status-image').textContent =

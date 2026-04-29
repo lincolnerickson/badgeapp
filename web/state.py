@@ -2,6 +2,7 @@
 
 import sys
 import os
+import threading
 from typing import Optional
 from PIL import Image
 
@@ -26,6 +27,7 @@ class AppState:
         self.current_row: int = 0
         # PDF export tasks: {task_id: {"status": str, "progress": int, "total": int, "path": str}}
         self.export_tasks: dict = {}
+        self.lock = threading.Lock()
 
     def reset_config(self):
         self.config = BadgeConfig()
