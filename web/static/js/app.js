@@ -6,6 +6,7 @@ const App = {
     config: null,
     csvInfo: null,
     currentRow: 0,
+    currentSide: 'front',
     fonts: [],
 
     async init() {
@@ -104,10 +105,12 @@ const App = {
     bindToolbar() {
         // File inputs
         const fileImage = document.getElementById('file-image');
+        const fileBackImage = document.getElementById('file-back-image');
         const fileCSV = document.getElementById('file-csv');
         const fileTemplate = document.getElementById('file-template');
 
         document.getElementById('btn-open-image').addEventListener('click', () => fileImage.click());
+        document.getElementById('btn-open-back-image').addEventListener('click', () => fileBackImage.click());
         document.getElementById('btn-open-csv').addEventListener('click', () => fileCSV.click());
         document.getElementById('btn-save-csv').addEventListener('click', () => this.saveCSV());
         document.getElementById('btn-load-template').addEventListener('click', () => fileTemplate.click());
@@ -123,12 +126,23 @@ const App = {
             BadgeEditor.setPreviewMode(e.target.checked);
         });
 
+        // Side toggle
+        document.getElementById('btn-side-front').addEventListener('click', () => this.switchSide('front'));
+        document.getElementById('btn-side-back').addEventListener('click', () => this.switchSide('back'));
+
+        // Badge size
+        document.getElementById('btn-apply-badge-size').addEventListener('click', () => this.applyBadgeSize());
+
         // PDF settings
         document.getElementById('btn-apply-pdf').addEventListener('click', () => this.applyPDFSettings());
 
         // File input handlers
         fileImage.addEventListener('change', (e) => {
             if (e.target.files[0]) this.uploadImage(e.target.files[0]);
+            e.target.value = '';
+        });
+        fileBackImage.addEventListener('change', (e) => {
+            if (e.target.files[0]) this.uploadBackImage(e.target.files[0]);
             e.target.value = '';
         });
         fileCSV.addEventListener('change', (e) => {
@@ -188,12 +202,21 @@ const App = {
                 Toast.error(result.error);
                 return;
             }
+            this._hasFrontBackground = true;
             this.config.badge_width = result.width;
             this.config.badge_height = result.height;
             BadgeEditor.updateSize(result.width, result.height);
-            BadgeEditor.setBackground(API.getBackgroundURL());
+            if (this.currentSide === 'front') {
+                BadgeEditor.setBackground(API.getBackgroundURL());
+            }
+            const dpi = parseInt(document.getElementById('badge-dpi').value) || 300;
             document.getElementById('status-image').textContent =
                 `Image: ${result.filename} (${result.width} x ${result.height})`;
+            // Update badge size controls to reflect new image dimensions
+            document.getElementById('badge-width-in').value = (result.width / dpi).toFixed(2);
+            document.getElementById('badge-height-in').value = (result.height / dpi).toFixed(2);
+            document.getElementById('badge-size-info').textContent =
+                `${result.width} x ${result.height} px (${(result.width / dpi).toFixed(2)}" x ${(result.height / dpi).toFixed(2)}" @ ${dpi} DPI)`;
             Toast.success(`Image loaded: ${result.filename}`);
             this.refreshEditor();
         } catch (e) {
@@ -270,6 +293,33 @@ const App = {
         }
     },
 
+    async applyBadgeSize() {
+        const widthIn = parseFloat(document.getElementById('badge-width-in').value) || 3.5;
+        const heightIn = parseFloat(document.getElementById('badge-height-in').value) || 2;
+        const dpi = parseInt(document.getElementById('badge-dpi').value) || 300;
+
+        const newWidth = Math.round(widthIn * dpi);
+        const newHeight = Math.round(heightIn * dpi);
+
+        try {
+            const result = await API.updateConfig({
+                badge_width: newWidth,
+                badge_height: newHeight,
+                dpi: dpi,
+            });
+            if (result.ok) {
+                this.config = result.config;
+                BadgeEditor.updateSize(newWidth, newHeight);
+                document.getElementById('badge-size-info').textContent =
+                    `${newWidth} x ${newHeight} px (${widthIn}" x ${heightIn}" @ ${dpi} DPI)`;
+                Toast.success(`Badge size: ${widthIn}" x ${heightIn}" @ ${dpi} DPI (${newWidth} x ${newHeight} px)`);
+                this.refreshEditor();
+            }
+        } catch (e) {
+            Toast.error('Failed to update badge size');
+        }
+    },
+
     async applyPDFSettings() {
         const data = {
             badges_per_row: parseInt(document.getElementById('pdf-cols').value) || 2,
@@ -289,6 +339,49 @@ const App = {
         }
     },
 
+    switchSide(side) {
+        this.currentSide = side;
+        document.getElementById('btn-side-front').classList.toggle('active', side === 'front');
+        document.getElementById('btn-side-back').classList.toggle('active', side === 'back');
+
+        // Switch background
+        if (side === 'back') {
+            if (this._hasBackBackground) {
+                BadgeEditor.setBackground(API.getBackBackgroundURL());
+            } else {
+                BadgeEditor.setBackground(null);
+            }
+        } else {
+            if (this._hasFrontBackground) {
+                BadgeEditor.setBackground(API.getBackgroundURL());
+            } else {
+                BadgeEditor.setBackground(null);
+            }
+        }
+
+        FieldPanel.deselect();
+        this.refreshEditor();
+    },
+
+    async uploadBackImage(file) {
+        try {
+            const result = await API.uploadBackImage(file);
+            if (result.error) {
+                Toast.error(result.error);
+                return;
+            }
+            this._hasBackBackground = true;
+            Toast.success(`Back image loaded: ${result.filename}`);
+            // If currently viewing back side, update background
+            if (this.currentSide === 'back') {
+                BadgeEditor.setBackground(API.getBackBackgroundURL());
+            }
+            this.refreshEditor();
+        } catch (e) {
+            Toast.error('Failed to upload back image');
+        }
+    },
+
     printBadge() {
         if (!this.csvInfo?.loaded) return;
         // Download single-badge PDF for printing via OS dialog
@@ -298,16 +391,30 @@ const App = {
     // --- Session restore ---
 
     async restoreSession() {
+        this._hasFrontBackground = false;
+        this._hasBackBackground = false;
+
         // Restore background image if server has one
         try {
             const bgInfo = await API.getBackgroundInfo();
             if (bgInfo.has_background) {
+                this._hasFrontBackground = true;
                 BadgeEditor.setBackground(API.getBackgroundURL());
                 document.getElementById('status-image').textContent =
                     `Image: ${bgInfo.filename} (${this.config.badge_width} x ${this.config.badge_height})`;
             }
         } catch (e) {
             console.error('Failed to restore background:', e);
+        }
+
+        // Restore back background
+        try {
+            const backInfo = await API.getBackBackgroundInfo();
+            if (backInfo.has_background) {
+                this._hasBackBackground = true;
+            }
+        } catch (e) {
+            console.error('Failed to restore back background:', e);
         }
 
         // Restore CSV status bar
@@ -347,8 +454,16 @@ const App = {
             document.getElementById('pdf-page-size').value = this.config.page_size;
             document.getElementById('pdf-margin').value = this.config.margin_mm;
             document.getElementById('pdf-spacing').value = this.config.spacing_mm;
+
+            // Badge size controls - derive inches from pixels using config DPI
+            const dpi = this.config.dpi || 300;
+            document.getElementById('badge-dpi').value = dpi;
+            const wIn = (this.config.badge_width / dpi).toFixed(2);
+            const hIn = (this.config.badge_height / dpi).toFixed(2);
+            document.getElementById('badge-width-in').value = wIn;
+            document.getElementById('badge-height-in').value = hIn;
             document.getElementById('badge-size-info').textContent =
-                `${this.config.badge_width} x ${this.config.badge_height} px`;
+                `${this.config.badge_width} x ${this.config.badge_height} px (${wIn}" x ${hIn}" @ ${dpi} DPI)`;
         }
     },
 

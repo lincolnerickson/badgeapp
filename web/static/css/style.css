@@ -173,6 +173,39 @@ button.danger:hover:not(:disabled) {
     cursor: pointer;
 }
 
+#side-toggle {
+    display: flex;
+    gap: 0;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.side-btn {
+    border: none;
+    border-radius: 0;
+    padding: 3px 12px;
+    font-size: 12px;
+    background: var(--bg);
+    color: var(--text);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+
+.side-btn + .side-btn {
+    border-left: 1px solid var(--border);
+}
+
+.side-btn.active {
+    background: var(--accent);
+    color: var(--accent-fg);
+    font-weight: 600;
+}
+
+.side-btn:hover:not(.active) {
+    background: #d8d8d8;
+}
+
 #badge-size-info {
     color: var(--text-secondary);
 }

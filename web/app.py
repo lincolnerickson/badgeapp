@@ -50,7 +50,7 @@ def auth_check():
 
 FIELD_ALLOWED_KEYS = {
     "x", "y", "font_family", "font_size", "font_color",
-    "bold", "italic", "alignment", "max_width",
+    "bold", "italic", "alignment", "max_width", "side",
 }
 
 # Temp directory for uploads and exports
@@ -115,6 +115,52 @@ def background_image():
         abort(404)
     buf = BytesIO()
     state.background.save(buf, format="PNG")
+    buf.seek(0)
+    return send_file(buf, mimetype="image/png")
+
+
+@app.route("/api/upload-back-image", methods=["POST"])
+def upload_back_image():
+    if "file" not in request.files:
+        return jsonify(error="No file provided"), 400
+    f = request.files["file"]
+    if not f.filename:
+        return jsonify(error="Empty filename"), 400
+
+    try:
+        img = Image.open(f.stream)
+        pixels = img.width * img.height
+        if pixels > Image.MAX_IMAGE_PIXELS:
+            return jsonify(error=f"Image too large ({pixels:,} pixels, max {Image.MAX_IMAGE_PIXELS:,})"), 400
+        img = img.convert("RGBA")
+    except Exception as e:
+        return jsonify(error=f"Invalid image: {e}"), 400
+
+    state.back_background = img
+    state.back_background_filename = f.filename
+
+    return jsonify(
+        ok=True,
+        filename=f.filename,
+        width=img.width,
+        height=img.height,
+    )
+
+
+@app.route("/api/back-background-info")
+def back_background_info():
+    return jsonify(
+        has_background=state.back_background is not None,
+        filename=state.back_background_filename,
+    )
+
+
+@app.route("/api/back-background-image")
+def back_background_image():
+    if state.back_background is None:
+        abort(404)
+    buf = BytesIO()
+    state.back_background.save(buf, format="PNG")
     buf.seek(0)
     return send_file(buf, mimetype="image/png")
 
@@ -212,7 +258,7 @@ def get_config():
 def update_config():
     data = request.get_json()
     for key in ("badges_per_row", "badges_per_col", "page_size",
-                "margin_mm", "spacing_mm", "badge_width", "badge_height"):
+                "margin_mm", "spacing_mm", "badge_width", "badge_height", "dpi"):
         if key in data:
             setattr(state.config, key, data[key])
     return jsonify(ok=True, config=state.config.to_dict())
@@ -368,7 +414,9 @@ def preview_badge(row_idx):
     if row_idx < 0 or row_idx >= state.csv_data.row_count:
         return jsonify(error="Row index out of range"), 404
 
-    img = render_badge(state.config, state.csv_data, row_idx, state.background)
+    side = request.args.get("side", "front")
+    img = render_badge(state.config, state.csv_data, row_idx, state.background,
+                       side=side, back_background=state.back_background)
     buf = BytesIO()
     img.convert("RGB").save(buf, format="PNG")
     buf.seek(0)
@@ -389,7 +437,9 @@ def preview_custom():
     temp_csv.headers = list(values.keys())
     temp_csv.rows = [values]
 
-    img = render_badge(state.config, temp_csv, 0, state.background)
+    side = request.args.get("side", "front")
+    img = render_badge(state.config, temp_csv, 0, state.background,
+                       side=side, back_background=state.back_background)
     buf = BytesIO()
     img.convert("RGB").save(buf, format="PNG")
     buf.seek(0)
@@ -404,22 +454,27 @@ def start_pdf_export():
     task_id = str(uuid.uuid4())[:8]
     output_path = os.path.join(UPLOAD_DIR, f"badges_{task_id}.pdf")
 
-    task = {
-        "status": "running",
-        "progress": 0,
-        "total": state.csv_data.row_count,
-        "path": output_path,
-        "error": None,
-    }
-    with state.lock:
-        state.export_tasks[task_id] = task
-
     # Capture current state for the thread
     config = BadgeConfig.from_dict(state.config.to_dict())
     csv_data_copy = CSVData()
     csv_data_copy.headers = list(state.csv_data.headers)
     csv_data_copy.rows = [dict(r) for r in state.csv_data.rows]
     bg = state.background.copy() if state.background else None
+    back_bg = state.back_background.copy() if state.back_background else None
+
+    total = state.csv_data.row_count
+    if config.has_back or back_bg is not None:
+        total *= 2
+
+    task = {
+        "status": "running",
+        "progress": 0,
+        "total": total,
+        "path": output_path,
+        "error": None,
+    }
+    with state.lock:
+        state.export_tasks[task_id] = task
 
     def run_export():
         def on_progress(n):
@@ -430,6 +485,7 @@ def start_pdf_export():
             export_pdf(
                 config, csv_data_copy, output_path,
                 background=bg,
+                back_background=back_bg,
                 on_progress=on_progress,
             )
             with state.lock:
@@ -485,7 +541,8 @@ def export_single_pdf(row_idx):
     temp_csv.rows = [dict(state.csv_data.rows[row_idx])]
 
     output_path = os.path.join(UPLOAD_DIR, f"badge_single_{row_idx}.pdf")
-    export_pdf(state.config, temp_csv, output_path, background=state.background)
+    export_pdf(state.config, temp_csv, output_path,
+               background=state.background, back_background=state.back_background)
 
     return send_file(
         output_path,

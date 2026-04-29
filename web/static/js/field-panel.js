@@ -53,12 +53,18 @@ const FieldPanel = {
 
     renderList() {
         const list = document.getElementById('field-list');
-        if (this.fields.length === 0) {
+        const currentSide = App.currentSide || 'front';
+        const sideFields = this.fields.filter(f => (f.side || 'front') === currentSide);
+        if (sideFields.length === 0) {
             list.innerHTML = '<div class="empty-msg">No fields added</div>';
             return;
         }
         list.innerHTML = '';
+        // Build mapping from filtered index to global index
+        this._filteredToGlobal = [];
         this.fields.forEach((f, idx) => {
+            if ((f.side || 'front') !== currentSide) return;
+            this._filteredToGlobal.push(idx);
             const item = document.createElement('div');
             item.className = 'field-item' + (idx === this.selectedIndex ? ' selected' : '');
             item.innerHTML = `
@@ -135,6 +141,7 @@ const FieldPanel = {
                 italic: false,
                 alignment: 'center',
                 max_width: 0,
+                side: App.currentSide || 'front',
             });
             if (result.ok) {
                 this.selectedIndex = result.index;

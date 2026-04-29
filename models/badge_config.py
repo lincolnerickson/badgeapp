@@ -18,6 +18,7 @@ class FieldPlacement:
     italic: bool = False
     alignment: str = "center"  # "left", "center", "right"
     max_width: int = 0  # 0 = no limit; otherwise auto-shrink text
+    side: str = "front"  # "front" or "back"
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -31,9 +32,12 @@ class FieldPlacement:
 class BadgeConfig:
     """Complete badge template: background, dimensions, fields, PDF options."""
     background_image_path: str = ""
+    back_background_image_path: str = ""
     badge_width: int = 1050   # pixels (3.5" at 300 DPI)
     badge_height: int = 600   # pixels (2" at 300 DPI)
     fields: List[FieldPlacement] = field(default_factory=list)
+
+    dpi: int = 300  # rendering DPI; font sizes are in points, scaled by dpi/72
 
     # PDF layout options
     badges_per_row: int = 2
@@ -41,6 +45,14 @@ class BadgeConfig:
     page_size: str = "letter"  # "letter" or "A4"
     margin_mm: float = 10.0
     spacing_mm: float = 2.0
+
+    def fields_for_side(self, side: str) -> List[FieldPlacement]:
+        return [f for f in self.fields if f.side == side]
+
+    @property
+    def has_back(self) -> bool:
+        return bool(self.back_background_image_path or self.fields_for_side("back"))
+
 
     def to_dict(self) -> dict:
         d = asdict(self)

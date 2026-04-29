@@ -6,6 +6,7 @@ from typing import Optional, Callable
 from PIL import Image
 from reportlab.lib.pagesizes import letter, A4
 from reportlab.lib.units import mm
+from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas as rl_canvas
 
 from models.badge_config import BadgeConfig
@@ -18,11 +19,32 @@ def _get_page_size(name: str):
     return A4 if name.lower() == "a4" else letter
 
 
+def _place_badge(c, badge_img, col, row_on_page, margin, cell_w, cell_h,
+                 draw_w, draw_h, spacing, page_h):
+    """Draw a rendered badge image at the given grid position on the PDF."""
+    # Composite onto white to avoid transparent areas rendering as black
+    if badge_img.mode == "RGBA":
+        white_bg = Image.new("RGBA", badge_img.size, (255, 255, 255, 255))
+        white_bg.paste(badge_img, mask=badge_img)
+        badge_img = white_bg.convert("RGB")
+    else:
+        badge_img = badge_img.convert("RGB")
+    img_buffer = BytesIO()
+    badge_img.save(img_buffer, format="PNG")
+    img_buffer.seek(0)
+
+    x = margin + col * (cell_w + spacing) + (cell_w - draw_w) / 2
+    y = page_h - margin - (row_on_page + 1) * cell_h - row_on_page * spacing + (cell_h - draw_h) / 2
+
+    c.drawImage(ImageReader(img_buffer), x, y, draw_w, draw_h)
+
+
 def export_pdf(
     config: BadgeConfig,
     csv_data: CSVData,
     output_path: str,
     background: Optional[Image.Image] = None,
+    back_background: Optional[Image.Image] = None,
     on_progress: Optional[Callable[[int], None]] = None,
     is_cancelled: Optional[Callable[[], bool]] = None,
 ) -> None:
@@ -30,6 +52,9 @@ def export_pdf(
 
     Badges are arranged in a grid on each page. Each badge is rendered
     at full resolution with Pillow, then placed onto the PDF with ReportLab.
+
+    When back content exists, pages are interleaved (front page, back page)
+    with back badges horizontally mirrored for duplex printing alignment.
     """
     page_w, page_h = _get_page_size(config.page_size)
     margin = config.margin_mm * mm
@@ -58,40 +83,54 @@ def export_pdf(
         draw_w = cell_h * badge_aspect
 
     badges_per_page = cols * rows
+    total_rows = csv_data.row_count
+    has_back = config.has_back or back_background is not None
 
     c = rl_canvas.Canvas(output_path, pagesize=(page_w, page_h))
+    progress_count = 0
 
-    total_rows = csv_data.row_count
-    for i in range(total_rows):
+    for page_start in range(0, total_rows, badges_per_page):
         if is_cancelled and is_cancelled():
             break
 
-        # Render badge image
-        badge_img = render_badge(config, csv_data, i, background)
-        badge_img = badge_img.convert("RGB")
+        page_end = min(page_start + badges_per_page, total_rows)
 
-        # Convert PIL Image to ReportLab-compatible format
-        img_buffer = BytesIO()
-        badge_img.save(img_buffer, format="PNG")
-        img_buffer.seek(0)
+        # --- Front page ---
+        for i in range(page_start, page_end):
+            if is_cancelled and is_cancelled():
+                break
+            badge_img = render_badge(config, csv_data, i, background, side="front")
+            page_idx = i - page_start
+            col = page_idx % cols
+            row_on_page = page_idx // cols
+            _place_badge(c, badge_img, col, row_on_page, margin, cell_w, cell_h,
+                         draw_w, draw_h, spacing, page_h)
+            progress_count += 1
+            if on_progress:
+                on_progress(progress_count)
 
-        # Position on page
-        page_idx = i % badges_per_page
-        col = page_idx % cols
-        row_on_page = page_idx // cols
-
-        # ReportLab origin is bottom-left, so invert Y
-        x = margin + col * (cell_w + spacing) + (cell_w - draw_w) / 2
-        y = page_h - margin - (row_on_page + 1) * cell_h - row_on_page * spacing + (cell_h - draw_h) / 2
-
-        from reportlab.lib.utils import ImageReader
-        c.drawImage(ImageReader(img_buffer), x, y, draw_w, draw_h)
-
-        # New page if this page is full (and there are more badges)
-        if page_idx == badges_per_page - 1 and i < total_rows - 1:
+        if has_back:
+            # Start a new page for backs
             c.showPage()
 
-        if on_progress:
-            on_progress(i + 1)
+            # --- Back page (horizontally mirrored for duplex) ---
+            for i in range(page_start, page_end):
+                if is_cancelled and is_cancelled():
+                    break
+                badge_img = render_badge(config, csv_data, i, background,
+                                         side="back", back_background=back_background)
+                page_idx = i - page_start
+                col = page_idx % cols
+                row_on_page = page_idx // cols
+                mirrored_col = cols - 1 - col
+                _place_badge(c, badge_img, mirrored_col, row_on_page, margin, cell_w, cell_h,
+                             draw_w, draw_h, spacing, page_h)
+                progress_count += 1
+                if on_progress:
+                    on_progress(progress_count)
+
+        # Start new page if there are more badges
+        if page_end < total_rows:
+            c.showPage()
 
     c.save()

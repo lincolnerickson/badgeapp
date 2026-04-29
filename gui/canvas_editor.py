@@ -26,6 +26,10 @@ class CanvasEditor(ttk.Frame):
         self.on_field_selected: Optional[Callable[[int], None]] = None
         self.on_field_moved: Optional[Callable[[int, float, float], None]] = None
 
+        # Side state
+        self.current_side: str = "front"
+        self._back_bg_image: Optional[Image.Image] = None
+
         # Display state
         self._bg_image: Optional[Image.Image] = None
         self._bg_photo: Optional[ImageTk.PhotoImage] = None
@@ -98,8 +102,19 @@ class CanvasEditor(ttk.Frame):
     # ------------------------------------------------------------------
 
     def set_background(self, img: Optional[Image.Image]):
-        """Set the background image (PIL Image)."""
+        """Set the front background image (PIL Image)."""
         self._bg_image = img
+        self.refresh()
+
+    def set_back_background(self, img: Optional[Image.Image]):
+        """Set the back background image (PIL Image)."""
+        self._back_bg_image = img
+        if self.current_side == "back":
+            self.refresh()
+
+    def set_side(self, side: str):
+        """Switch between 'front' and 'back' views."""
+        self.current_side = side
         self.refresh()
 
     def refresh(self):
@@ -117,11 +132,14 @@ class CanvasEditor(ttk.Frame):
         self._offset_x = (cw - bw * self._scale) / 2
         self._offset_y = (ch - bh * self._scale) / 2
 
+        # Choose background based on current side
+        active_bg = self._back_bg_image if self.current_side == "back" else self._bg_image
+
         # Draw background
-        if self._bg_image:
+        if active_bg:
             display_w = int(bw * self._scale)
             display_h = int(bh * self._scale)
-            resized = self._bg_image.resize((display_w, display_h), Image.LANCZOS)
+            resized = active_bg.resize((display_w, display_h), Image.LANCZOS)
             self._bg_photo = ImageTk.PhotoImage(resized)
             self.canvas.create_image(
                 self._offset_x, self._offset_y,
@@ -140,8 +158,10 @@ class CanvasEditor(ttk.Frame):
         y2 = y1 + bh * self._scale
         self.canvas.create_rectangle(x1, y1, x2, y2, outline="#666666", width=1, tags="border")
 
-        # Draw fields
+        # Draw fields (filtered by current side)
         for idx, fp in enumerate(self.config.fields):
+            if fp.side != self.current_side:
+                continue
             self._draw_field(idx, fp)
 
         self._update_row_label()
@@ -156,8 +176,9 @@ class CanvasEditor(ttk.Frame):
 
         cx, cy = image_to_canvas(fp.x, fp.y, self._scale, self._offset_x, self._offset_y)
 
-        # Scale font size for display
-        display_size = max(8, int(fp.font_size * self._scale))
+        # Scale font size: points → badge pixels (dpi/72), then → canvas pixels (scale)
+        dpi_scale = self.config.dpi / 72.0
+        display_size = max(8, int(fp.font_size * dpi_scale * self._scale))
 
         anchor_map = {"left": tk.NW, "center": tk.N, "right": tk.NE}
         anchor = anchor_map.get(fp.alignment, tk.N)

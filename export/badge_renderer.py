@@ -17,26 +17,43 @@ def _load_font(fp: FieldPlacement, size_override: Optional[int] = None) -> Image
             return ImageFont.truetype(path, size)
         except (OSError, IOError):
             pass
-    # Fallback: try Arial directly
-    try:
-        return ImageFont.truetype("arial.ttf", size)
-    except (OSError, IOError):
-        return ImageFont.load_default()
+    # Fallback: try common system fonts
+    for fallback in ("arial.ttf", "Arial.ttf", "DejaVuSans.ttf",
+                     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"):
+        try:
+            return ImageFont.truetype(fallback, size)
+        except (OSError, IOError):
+            continue
+    # Last resort: try any discovered font
+    from utils.fonts import discover_fonts
+    all_fonts = discover_fonts()
+    if all_fonts:
+        first_path = next(iter(all_fonts.values()))
+        try:
+            return ImageFont.truetype(first_path, size)
+        except (OSError, IOError):
+            pass
+    return ImageFont.load_default()
 
 
-def _draw_field(draw: ImageDraw.ImageDraw, fp: FieldPlacement, text: str) -> None:
+def _draw_field(draw: ImageDraw.ImageDraw, fp: FieldPlacement, text: str,
+                dpi_scale: float = 1.0) -> None:
     """Draw a single text field onto the badge image."""
     if not text:
         return
 
-    font = _load_font(fp)
-    effective_size = fp.font_size
+    # Scale font size from points to pixels: points * (dpi / 72)
+    pixel_size = max(1, round(fp.font_size * dpi_scale))
+    font = _load_font(fp, pixel_size)
+    effective_size = pixel_size
 
     # Auto-shrink if max_width is set and text overflows
+    # Scale max_width by dpi_scale too since field positions are in badge pixels
     if fp.max_width > 0:
         bbox = draw.textbbox((0, 0), text, font=font)
         text_width = bbox[2] - bbox[0]
-        while text_width > fp.max_width and effective_size > 8:
+        min_size = max(1, round(8 * dpi_scale))
+        while text_width > fp.max_width and effective_size > min_size:
             effective_size -= 1
             font = _load_font(fp, effective_size)
             bbox = draw.textbbox((0, 0), text, font=font)
@@ -59,6 +76,8 @@ def render_badge(
     csv_data: CSVData,
     row_index: int,
     background: Optional[Image.Image] = None,
+    side: str = "front",
+    back_background: Optional[Image.Image] = None,
 ) -> Image.Image:
     """Render a complete badge for one CSV row.
 
@@ -66,28 +85,42 @@ def render_badge(
         config: Badge template configuration.
         csv_data: Loaded CSV data.
         row_index: Which CSV row to render.
-        background: Pre-loaded background image (avoids reloading per badge).
+        background: Pre-loaded front background image.
+        side: Which side to render ("front" or "back").
+        back_background: Pre-loaded back background image.
 
     Returns:
         PIL Image of the rendered badge at full resolution.
     """
-    # Start with background or blank
-    if background:
-        badge = background.copy()
-        badge = badge.resize((config.badge_width, config.badge_height), Image.LANCZOS)
-    elif config.background_image_path:
-        try:
-            badge = Image.open(config.background_image_path).convert("RGBA")
-            badge = badge.resize((config.badge_width, config.badge_height), Image.LANCZOS)
-        except (OSError, IOError):
-            badge = Image.new("RGBA", (config.badge_width, config.badge_height), "white")
+    size = (config.badge_width, config.badge_height)
+
+    # Choose background based on side
+    if side == "back":
+        bg = back_background
+        bg_path = config.back_background_image_path
     else:
-        badge = Image.new("RGBA", (config.badge_width, config.badge_height), "white")
+        bg = background
+        bg_path = config.background_image_path
+
+    if bg:
+        badge = bg.copy()
+        badge = badge.resize(size, Image.LANCZOS)
+    elif bg_path:
+        try:
+            badge = Image.open(bg_path).convert("RGBA")
+            badge = badge.resize(size, Image.LANCZOS)
+        except (OSError, IOError):
+            badge = Image.new("RGBA", size, "white")
+    else:
+        badge = Image.new("RGBA", size, "white")
 
     draw = ImageDraw.Draw(badge)
 
-    for fp in config.fields:
+    # Scale factor: font sizes are in points, convert to pixels at badge DPI
+    dpi_scale = config.dpi / 72.0
+
+    for fp in config.fields_for_side(side):
         text = csv_data.get_value(row_index, fp.csv_column)
-        _draw_field(draw, fp, text)
+        _draw_field(draw, fp, text, dpi_scale)
 
     return badge

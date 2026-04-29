@@ -27,6 +27,13 @@ const API = {
         return resp.json();
     },
 
+    async uploadBackImage(file) {
+        const fd = new FormData();
+        fd.append('file', file);
+        const resp = await fetch('/api/upload-back-image', { method: 'POST', body: fd, headers: this._headers() });
+        return resp.json();
+    },
+
     async uploadCSV(file) {
         const fd = new FormData();
         fd.append('file', file);
@@ -157,20 +164,31 @@ const API = {
 
     // --- Rendering & export ---
 
-    getPreviewURL(rowIdx) {
-        return this._urlWithToken(`/api/preview/${rowIdx}?t=${Date.now()}`);
+    getPreviewURL(rowIdx, side) {
+        const s = side || 'front';
+        return this._urlWithToken(`/api/preview/${rowIdx}?side=${s}&t=${Date.now()}`);
     },
 
-    getPreviewCustomURL(values) {
-        return this._urlWithToken(`/api/preview-custom?values=${encodeURIComponent(JSON.stringify(values))}&t=${Date.now()}`);
+    getPreviewCustomURL(values, side) {
+        const s = side || 'front';
+        return this._urlWithToken(`/api/preview-custom?side=${s}&values=${encodeURIComponent(JSON.stringify(values))}&t=${Date.now()}`);
     },
 
     getBackgroundURL() {
         return this._urlWithToken(`/api/background-image?t=${Date.now()}`);
     },
 
+    getBackBackgroundURL() {
+        return this._urlWithToken(`/api/back-background-image?t=${Date.now()}`);
+    },
+
     async getBackgroundInfo() {
         const resp = await fetch('/api/background-info', { headers: this._headers() });
+        return resp.json();
+    },
+
+    async getBackBackgroundInfo() {
+        const resp = await fetch('/api/back-background-info', { headers: this._headers() });
         return resp.json();
     },
 

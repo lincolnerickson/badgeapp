@@ -11,7 +11,8 @@
     <!-- Toolbar -->
     <div id="toolbar">
         <div class="toolbar-group">
-            <button id="btn-open-image" title="Open background image (Ctrl+I)">Open Image</button>
+            <button id="btn-open-image" title="Open front background image (Ctrl+I)">Front Image</button>
+            <button id="btn-open-back-image" title="Open back background image">Back Image</button>
             <button id="btn-open-csv" title="Open CSV file (Ctrl+O)">Open CSV</button>
             <button id="btn-save-csv" title="Save CSV (Ctrl+S)" disabled>Save CSV</button>
             <span class="toolbar-sep"></span>
@@ -44,6 +45,10 @@
                 <label id="preview-toggle-label">
                     <input type="checkbox" id="preview-toggle"> Show rendered preview
                 </label>
+                <div id="side-toggle">
+                    <button id="btn-side-front" class="side-btn active">Front</button>
+                    <button id="btn-side-back" class="side-btn">Back</button>
+                </div>
                 <span id="badge-size-info"></span>
             </div>
 
@@ -85,61 +90,77 @@
             <div id="field-props" class="panel-section" style="display:none">
                 <h3>Properties</h3>
                 <div class="prop-grid">
-                    <label>X</label>
+                    <label for="prop-x">X</label>
                     <input type="number" id="prop-x" step="1">
 
-                    <label>Y</label>
+                    <label for="prop-y">Y</label>
                     <input type="number" id="prop-y" step="1">
 
-                    <label>Font</label>
+                    <label for="prop-font">Font</label>
                     <select id="prop-font"></select>
 
-                    <label>Size</label>
+                    <label for="prop-size">Size</label>
                     <input type="number" id="prop-size" min="6" max="200" step="1">
 
-                    <label>Color</label>
+                    <label for="prop-color">Color</label>
                     <input type="color" id="prop-color">
 
-                    <label>Bold</label>
+                    <label for="prop-bold">Bold</label>
                     <input type="checkbox" id="prop-bold">
 
-                    <label>Italic</label>
+                    <label for="prop-italic">Italic</label>
                     <input type="checkbox" id="prop-italic">
 
-                    <label>Align</label>
+                    <label for="prop-align">Align</label>
                     <select id="prop-align">
                         <option value="left">Left</option>
                         <option value="center">Center</option>
                         <option value="right">Right</option>
                     </select>
 
-                    <label>Max Width</label>
+                    <label for="prop-max-width">Max Width</label>
                     <input type="number" id="prop-max-width" min="0" step="10">
                 </div>
                 <button id="btn-apply-props" class="accent" style="margin-top:8px;width:100%">Apply Changes</button>
                 <button id="btn-delete-field" style="margin-top:4px;width:100%">Delete Field</button>
             </div>
 
+            <!-- Badge Size -->
+            <div class="panel-section">
+                <h3>Badge Size</h3>
+                <div class="prop-grid">
+                    <label for="badge-width-in">Width (in)</label>
+                    <input type="number" id="badge-width-in" min="0.5" max="12" step="0.25" value="3.5">
+
+                    <label for="badge-height-in">Height (in)</label>
+                    <input type="number" id="badge-height-in" min="0.5" max="12" step="0.25" value="2">
+
+                    <label for="badge-dpi">DPI</label>
+                    <input type="number" id="badge-dpi" min="72" max="600" step="1" value="300">
+                </div>
+                <button id="btn-apply-badge-size" style="margin-top:8px;width:100%">Apply Badge Size</button>
+            </div>
+
             <!-- PDF Settings -->
             <div class="panel-section">
                 <h3>PDF Layout</h3>
                 <div class="prop-grid">
-                    <label>Columns</label>
+                    <label for="pdf-cols">Columns</label>
                     <input type="number" id="pdf-cols" min="1" max="10" value="2">
 
-                    <label>Rows</label>
+                    <label for="pdf-rows">Rows</label>
                     <input type="number" id="pdf-rows" min="1" max="20" value="4">
 
-                    <label>Page</label>
+                    <label for="pdf-page-size">Page</label>
                     <select id="pdf-page-size">
                         <option value="letter">Letter</option>
                         <option value="A4">A4</option>
                     </select>
 
-                    <label>Margin (mm)</label>
+                    <label for="pdf-margin">Margin (mm)</label>
                     <input type="number" id="pdf-margin" min="0" max="50" step="0.5" value="10">
 
-                    <label>Spacing (mm)</label>
+                    <label for="pdf-spacing">Spacing (mm)</label>
                     <input type="number" id="pdf-spacing" min="0" max="20" step="0.5" value="2">
                 </div>
                 <button id="btn-apply-pdf" style="margin-top:8px;width:100%">Apply PDF Settings</button>
@@ -163,6 +184,7 @@
 
     <!-- Hidden file inputs -->
     <input type="file" id="file-image" accept="image/*" style="display:none">
+    <input type="file" id="file-back-image" accept="image/*" style="display:none">
     <input type="file" id="file-csv" accept=".csv" style="display:none">
     <input type="file" id="file-template" accept=".json" style="display:none">
 

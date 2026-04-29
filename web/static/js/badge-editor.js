@@ -80,7 +80,7 @@ const BadgeEditor = {
 
     updatePreview() {
         if (!App.csvInfo?.loaded || App.csvInfo.row_count === 0) return;
-        this.previewImg.src = API.getPreviewURL(App.currentRow);
+        this.previewImg.src = API.getPreviewURL(App.currentRow, App.currentSide);
     },
 
     /**
@@ -107,9 +107,11 @@ const BadgeEditor = {
             }
         }
 
-        // Rebuild SVG text elements
+        // Rebuild SVG text elements (filtered by current side)
         this.fieldsGroup.innerHTML = '';
+        const currentSide = App.currentSide || 'front';
         fields.forEach((field, idx) => {
+            if ((field.side || 'front') !== currentSide) return;
             const text = rowData[field.csv_column] || field.csv_column;
             const el = this.createFieldElement(field, idx, text);
             this.fieldsGroup.appendChild(el);
@@ -137,7 +139,10 @@ const BadgeEditor = {
         text.setAttribute('x', field.x);
         text.setAttribute('y', field.y);
         text.setAttribute('fill', field.font_color || '#000000');
-        text.setAttribute('font-size', field.font_size || 24);
+        // Scale font size from points to badge pixels: points * (dpi / 72)
+        const dpi = (App.config && App.config.dpi) || 300;
+        const pixelSize = Math.round((field.font_size || 24) * dpi / 72);
+        text.setAttribute('font-size', pixelSize);
         text.setAttribute('font-family', field.font_family || 'Arial');
 
         if (field.bold) text.setAttribute('font-weight', 'bold');

@@ -29,6 +29,8 @@ class MainWindow:
         self.config = BadgeConfig()
         self.csv_data = CSVData()
         self._bg_image: Optional[Image.Image] = None
+        self._back_bg_image: Optional[Image.Image] = None
+        self._current_side: str = "front"
 
         self._build_menu()
         self._build_toolbar()
@@ -53,7 +55,8 @@ class MainWindow:
         self.root.config(menu=menubar)
 
         file_menu = tk.Menu(menubar, tearoff=0)
-        file_menu.add_command(label="Open Background Image...", command=self._open_bg_image)
+        file_menu.add_command(label="Open Front Background Image...", command=self._open_bg_image)
+        file_menu.add_command(label="Open Back Background Image...", command=self._open_back_bg_image)
         file_menu.add_command(label="Open CSV...", command=self._open_csv)
         file_menu.add_command(label="Save CSV", command=self._save_csv)
         file_menu.add_command(label="Save CSV As...", command=self._save_csv_as)
@@ -79,12 +82,23 @@ class MainWindow:
         toolbar.pack(fill=tk.X, pady=(0, 1))
 
         pad = dict(padx=2, pady=4)
-        ttk.Button(toolbar, text="Open Image", style="Toolbar.TButton",
+        ttk.Button(toolbar, text="Front Image", style="Toolbar.TButton",
                    command=self._open_bg_image).pack(side=tk.LEFT, **pad)
+        ttk.Button(toolbar, text="Back Image", style="Toolbar.TButton",
+                   command=self._open_back_bg_image).pack(side=tk.LEFT, **pad)
         ttk.Button(toolbar, text="Open CSV", style="Toolbar.TButton",
                    command=self._open_csv).pack(side=tk.LEFT, **pad)
         ttk.Button(toolbar, text="Save CSV", style="Toolbar.TButton",
                    command=self._save_csv).pack(side=tk.LEFT, **pad)
+
+        ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=6, pady=4)
+
+        # Side toggle
+        self._side_var = tk.StringVar(value="front")
+        ttk.Radiobutton(toolbar, text="Front", variable=self._side_var,
+                        value="front", command=self._on_side_changed).pack(side=tk.LEFT, **pad)
+        ttk.Radiobutton(toolbar, text="Back", variable=self._side_var,
+                        value="back", command=self._on_side_changed).pack(side=tk.LEFT, **pad)
 
         ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=6, pady=4)
 
@@ -146,6 +160,7 @@ class MainWindow:
         self.field_panel.on_field_deleted = lambda idx: self.canvas_editor.refresh()
         self.field_panel.on_field_updated = lambda idx: self.canvas_editor.refresh()
         self.field_panel.on_field_selected = self._on_panel_field_selected
+        self.field_panel.on_badge_size_changed = self._on_badge_size_changed
 
     def _on_canvas_field_selected(self, idx: int):
         self.field_panel.select_field(idx)
@@ -155,6 +170,10 @@ class MainWindow:
 
     def _on_panel_field_selected(self, idx: int):
         self.canvas_editor.select_field(idx)
+
+    def _on_badge_size_changed(self, w: int, h: int):
+        self.canvas_editor.refresh()
+        self._update_status()
 
     # ------------------------------------------------------------------
     # Actions
@@ -182,7 +201,35 @@ class MainWindow:
         self._bg_image = img
 
         self.canvas_editor.set_background(img)
+        self.field_panel.update_badge_size_display()
         self._update_status()
+
+    def _open_back_bg_image(self):
+        path = filedialog.askopenfilename(
+            title="Select Back Background Image",
+            filetypes=[
+                ("Image files", "*.png *.jpg *.jpeg *.bmp *.tiff *.gif"),
+                ("All files", "*.*"),
+            ],
+        )
+        if not path:
+            return
+        try:
+            img = Image.open(path).convert("RGBA")
+        except Exception as e:
+            messagebox.showerror("Error", f"Could not open image:\n{e}")
+            return
+
+        self.config.back_background_image_path = path
+        self._back_bg_image = img
+        self.canvas_editor.set_back_background(img)
+        self._update_status()
+
+    def _on_side_changed(self):
+        side = self._side_var.get()
+        self._current_side = side
+        self.canvas_editor.set_side(side)
+        self.field_panel.set_side(side)
 
     def _open_csv(self):
         path = filedialog.askopenfilename(
@@ -263,6 +310,7 @@ class MainWindow:
 
         # Apply loaded config
         self.config.background_image_path = loaded.background_image_path
+        self.config.back_background_image_path = loaded.back_background_image_path
         self.config.badge_width = loaded.badge_width
         self.config.badge_height = loaded.badge_height
         self.config.fields = loaded.fields
@@ -272,7 +320,7 @@ class MainWindow:
         self.config.margin_mm = loaded.margin_mm
         self.config.spacing_mm = loaded.spacing_mm
 
-        # Reload background image if path is set
+        # Reload front background image if path is set
         if self.config.background_image_path:
             try:
                 self._bg_image = Image.open(self.config.background_image_path).convert("RGBA")
@@ -283,6 +331,18 @@ class MainWindow:
         else:
             self._bg_image = None
             self.canvas_editor.set_background(None)
+
+        # Reload back background image if path is set
+        if self.config.back_background_image_path:
+            try:
+                self._back_bg_image = Image.open(self.config.back_background_image_path).convert("RGBA")
+                self.canvas_editor.set_back_background(self._back_bg_image)
+            except Exception:
+                self._back_bg_image = None
+                self.canvas_editor.set_back_background(None)
+        else:
+            self._back_bg_image = None
+            self.canvas_editor.set_back_background(None)
 
         self.field_panel.refresh_field_list()
         self.canvas_editor.refresh()
@@ -466,9 +526,10 @@ class MainWindow:
             return
         manual_csv = self._manual_make_csv(values)
         bg = self._bg_image
+        back_bg = self._back_bg_image
 
         def do_export(on_progress, is_cancelled):
-            export_pdf(self.config, manual_csv, path, bg, on_progress, is_cancelled)
+            export_pdf(self.config, manual_csv, path, bg, back_bg, on_progress, is_cancelled)
 
         dialog = ExportProgressDialog(self._manual_dialog, 1, do_export)
         self._manual_dialog.wait_window(dialog)
@@ -516,12 +577,15 @@ class MainWindow:
             return
 
         total = self.csv_data.row_count
+        if self.config.has_back:
+            total *= 2
         config = self.config
         csv_data = self.csv_data
         bg = self._bg_image
+        back_bg = self._back_bg_image
 
         def do_export(on_progress, is_cancelled):
-            export_pdf(config, csv_data, path, bg, on_progress, is_cancelled)
+            export_pdf(config, csv_data, path, bg, back_bg, on_progress, is_cancelled)
 
         dialog = ExportProgressDialog(self.root, total, do_export)
         self.root.wait_window(dialog)

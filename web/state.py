@@ -23,6 +23,8 @@ class AppState:
         self.csv_data: CSVData = CSVData()
         self.background: Optional[Image.Image] = None
         self.background_filename: str = ""
+        self.back_background: Optional[Image.Image] = None
+        self.back_background_filename: str = ""
         self.csv_filename: str = ""
         self.current_row: int = 0
         # PDF export tasks: {task_id: {"status": str, "progress": int, "total": int, "path": str}}
@@ -33,6 +35,8 @@ class AppState:
         self.config = BadgeConfig()
         self.background = None
         self.background_filename = ""
+        self.back_background = None
+        self.back_background_filename = ""
 
     def reset_csv(self):
         self.csv_data = CSVData()

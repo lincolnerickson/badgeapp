@@ -1,0 +1,11 @@
+Badge Number,First Name,Last Name,Title,Company,Department,Email,Phone,City,Dietary
+101,Sarah,Mitchell,Software Engineer,Acme Corp,Engineering,sarah.m@acme.com,555-0101,Denver,Vegetarian
+102,James,O'Brien,Product Manager,TechNova,Product,james.ob@technova.io,555-0102,Austin,None
+103,Priya,Sharma,UX Designer,DesignHub,Design,priya.s@designhub.com,555-0103,Seattle,Vegan
+104,Marcus,Chen,CTO,StartupLab,Executive,marcus.c@startuplab.co,555-0104,San Francisco,Gluten-Free
+105,Elena,Rodriguez,Data Scientist,DataWorks,Analytics,elena.r@dataworks.ai,555-0105,Chicago,None
+106,David,Kim,DevOps Lead,CloudScale,Infrastructure,david.k@cloudscale.net,555-0106,Portland,Kosher
+107,Aisha,Johnson,Marketing Director,BrandForge,Marketing,aisha.j@brandforge.com,555-0107,New York,Halal
+108,Thomas,Nguyen,Security Analyst,CyberShield,Security,thomas.n@cybershield.io,555-0108,Boston,None
+109,Maya,Patel,Frontend Developer,WebCraft,Engineering,maya.p@webcraft.dev,555-0109,Los Angeles,Vegetarian
+110,Ryan,Kowalski,Sales Engineer,SalesForce,Sales,ryan.k@salesforce.com,555-0110,Miami,None

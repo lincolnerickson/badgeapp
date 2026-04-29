@@ -24,9 +24,12 @@ class FieldPanel(ttk.Frame):
         self.on_field_deleted: Optional[Callable[[int], None]] = None
         self.on_field_updated: Optional[Callable[[int], None]] = None
         self.on_field_selected: Optional[Callable[[int], None]] = None
+        self.on_badge_size_changed: Optional[Callable[[int, int], None]] = None
 
-        self._selected_idx: int = -1
+        self._selected_idx: int = -1  # global index into config.fields
         self._updating = False  # prevent feedback loops
+        self._current_side: str = "front"
+        self._listbox_to_field_idx: List[int] = []  # maps listbox row → global field index
 
         self._font_families: List[str] = []
 
@@ -175,9 +178,43 @@ class FieldPanel(ttk.Frame):
         ttk.Button(props_frame, text="Apply Changes", style="Accent.TButton",
                    command=self._apply_changes).pack(fill=tk.X, pady=(10, 2))
 
+        # --- Badge Size Section ---
+        size_frame = ttk.LabelFrame(self, text="Badge Size", padding=(8, 6))
+        size_frame.pack(fill=tk.X, **pad)
+
+        row_w = ttk.Frame(size_frame, style="Panel.TFrame")
+        row_w.pack(fill=tk.X, pady=2)
+        ttk.Label(row_w, text="Width (in):", width=10, style="Panel.TLabel").pack(side=tk.LEFT)
+        self.badge_w_in_var = tk.StringVar(value="3.5")
+        ttk.Entry(row_w, textvariable=self.badge_w_in_var, width=8).pack(side=tk.LEFT)
+
+        row_h = ttk.Frame(size_frame, style="Panel.TFrame")
+        row_h.pack(fill=tk.X, pady=2)
+        ttk.Label(row_h, text="Height (in):", width=10, style="Panel.TLabel").pack(side=tk.LEFT)
+        self.badge_h_in_var = tk.StringVar(value="2")
+        ttk.Entry(row_h, textvariable=self.badge_h_in_var, width=8).pack(side=tk.LEFT)
+
+        row_dpi = ttk.Frame(size_frame, style="Panel.TFrame")
+        row_dpi.pack(fill=tk.X, pady=2)
+        ttk.Label(row_dpi, text="DPI:", width=10, style="Panel.TLabel").pack(side=tk.LEFT)
+        self.badge_dpi_var = tk.StringVar(value="300")
+        ttk.Entry(row_dpi, textvariable=self.badge_dpi_var, width=8).pack(side=tk.LEFT)
+
+        self.badge_size_label = ttk.Label(size_frame, text="1050 x 600 px", style="Panel.TLabel")
+        self.badge_size_label.pack(anchor=tk.W, pady=(4, 2))
+
+        ttk.Button(size_frame, text="Apply Badge Size",
+                   command=self._apply_badge_size).pack(fill=tk.X, pady=(4, 0))
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
+
+    def set_side(self, side: str):
+        """Switch which side's fields are shown."""
+        self._current_side = side
+        self._selected_idx = -1
+        self.refresh_field_list()
 
     def refresh_columns(self):
         """Update the column dropdown from CSV headers."""
@@ -186,12 +223,18 @@ class FieldPanel(ttk.Frame):
             self.column_var.set(self.csv_data.headers[0])
 
     def refresh_field_list(self):
-        """Update the placed fields listbox."""
+        """Update the placed fields listbox (filtered by current side)."""
         self.field_listbox.delete(0, tk.END)
-        for fp in self.config.fields:
+        self._listbox_to_field_idx = []
+        for idx, fp in enumerate(self.config.fields):
+            if fp.side != self._current_side:
+                continue
             self.field_listbox.insert(tk.END, fp.csv_column)
-        if 0 <= self._selected_idx < len(self.config.fields):
-            self.field_listbox.selection_set(self._selected_idx)
+            self._listbox_to_field_idx.append(idx)
+        # Restore selection if still valid
+        if self._selected_idx in self._listbox_to_field_idx:
+            lb_idx = self._listbox_to_field_idx.index(self._selected_idx)
+            self.field_listbox.selection_set(lb_idx)
 
     def refresh_fonts(self):
         """Load available font families into the font dropdown."""
@@ -201,11 +244,14 @@ class FieldPanel(ttk.Frame):
             self.font_var.set(self._font_families[0])
 
     def select_field(self, idx: int):
-        """Select a field by index and populate the property editors."""
+        """Select a field by global index and populate the property editors."""
         self._selected_idx = idx
         self.field_listbox.selection_clear(0, tk.END)
         if 0 <= idx < len(self.config.fields):
-            self.field_listbox.selection_set(idx)
+            # Map global index to listbox index
+            if idx in self._listbox_to_field_idx:
+                lb_idx = self._listbox_to_field_idx.index(idx)
+                self.field_listbox.selection_set(lb_idx)
             self._load_field_properties(self.config.fields[idx])
         if self.on_field_selected:
             self.on_field_selected(idx)
@@ -253,6 +299,7 @@ class FieldPanel(ttk.Frame):
             y=self.config.badge_height / 2,
             font_family=self.font_var.get() or "Arial",
             font_size=24,
+            side=self._current_side,
         )
         self.config.fields.append(fp)
         self.refresh_field_list()
@@ -304,6 +351,37 @@ class FieldPanel(ttk.Frame):
         if self.on_field_updated:
             self.on_field_updated(idx)
 
+    def _apply_badge_size(self):
+        """Compute pixel dimensions from inches + DPI and update config."""
+        try:
+            w_in = float(self.badge_w_in_var.get())
+            h_in = float(self.badge_h_in_var.get())
+            dpi = int(self.badge_dpi_var.get())
+        except ValueError:
+            return
+
+        new_w = max(1, round(w_in * dpi))
+        new_h = max(1, round(h_in * dpi))
+        self.config.badge_width = new_w
+        self.config.badge_height = new_h
+        self.badge_size_label.config(text=f'{new_w} x {new_h} px ({w_in}" x {h_in}" @ {dpi} DPI)')
+        if self.on_badge_size_changed:
+            self.on_badge_size_changed(new_w, new_h)
+
+    def update_badge_size_display(self):
+        """Update the badge size controls to reflect current config."""
+        try:
+            dpi = int(self.badge_dpi_var.get())
+        except ValueError:
+            dpi = 300
+        w_in = round(self.config.badge_width / dpi, 2)
+        h_in = round(self.config.badge_height / dpi, 2)
+        self.badge_w_in_var.set(str(w_in))
+        self.badge_h_in_var.set(str(h_in))
+        self.badge_size_label.config(
+            text=f'{self.config.badge_width} x {self.config.badge_height} px ({w_in}" x {h_in}" @ {dpi} DPI)'
+        )
+
     def _pick_color(self):
         color = colorchooser.askcolor(
             initialcolor=self.color_var.get(), title="Choose text color"
@@ -315,8 +393,10 @@ class FieldPanel(ttk.Frame):
     def _on_listbox_select(self, event):
         sel = self.field_listbox.curselection()
         if sel:
-            idx = sel[0]
-            self._selected_idx = idx
-            self._load_field_properties(self.config.fields[idx])
-            if self.on_field_selected:
-                self.on_field_selected(idx)
+            lb_idx = sel[0]
+            if lb_idx < len(self._listbox_to_field_idx):
+                idx = self._listbox_to_field_idx[lb_idx]
+                self._selected_idx = idx
+                self._load_field_properties(self.config.fields[idx])
+                if self.on_field_selected:
+                    self.on_field_selected(idx)
