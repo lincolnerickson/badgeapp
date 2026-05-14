@@ -6,9 +6,29 @@ import json
 
 
 @dataclass
+class ConditionalRule:
+    """Conditional output for a field.
+
+    Two match modes:
+      - "y" (default): cell must start with 'Y'. Output = text + trailing-after-Y.
+      - "non_dash": cell must be non-blank and not just '-'. Output = text + cell.
+    """
+    column: str = ""
+    text: str = ""
+    match: str = "y"  # "y" or "non_dash"
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "ConditionalRule":
+        return cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
+
+
+@dataclass
 class FieldPlacement:
     """One text field positioned on the badge."""
-    csv_column: str
+    csv_column: str = ""
     x: float = 0.0
     y: float = 0.0
     font_family: str = "Arial"
@@ -17,15 +37,27 @@ class FieldPlacement:
     bold: bool = False
     italic: bool = False
     alignment: str = "center"  # "left", "center", "right"
-    max_width: int = 0  # 0 = no limit; otherwise auto-shrink text
+    max_width: int = 0  # 0 = no limit; otherwise auto-shrink text or wrap
+    wrap: bool = False  # if True with max_width > 0, word-wrap instead of shrinking
+    line_height: float = 1.0  # multiplier of natural line height for wrapped text
     side: str = "front"  # "front" or "back"
+    # When non-empty, the field renders this literal text and ignores csv_column/rules.
+    static_text: str = ""
+    # When non-empty, the field's text is resolved from these rules instead of csv_column.
+    rules: List[ConditionalRule] = field(default_factory=list)
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        d = asdict(self)
+        d["rules"] = [r.to_dict() for r in self.rules]
+        return d
 
     @classmethod
     def from_dict(cls, d: dict) -> "FieldPlacement":
-        return cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
+        d = dict(d)
+        rules_data = d.pop("rules", [])
+        fp = cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
+        fp.rules = [ConditionalRule.from_dict(r) for r in rules_data]
+        return fp
 
 
 @dataclass

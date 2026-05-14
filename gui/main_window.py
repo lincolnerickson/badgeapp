@@ -313,6 +313,7 @@ class MainWindow:
         self.config.back_background_image_path = loaded.back_background_image_path
         self.config.badge_width = loaded.badge_width
         self.config.badge_height = loaded.badge_height
+        self.config.dpi = loaded.dpi
         self.config.fields = loaded.fields
         self.config.badges_per_row = loaded.badges_per_row
         self.config.badges_per_col = loaded.badges_per_col
@@ -345,6 +346,8 @@ class MainWindow:
             self.canvas_editor.set_back_background(None)
 
         self.field_panel.refresh_field_list()
+        self.field_panel.update_badge_size_display()
+        self.field_panel.update_pdf_settings_display()
         self.canvas_editor.refresh()
         self._set_status(f"Template loaded: {path}")
 

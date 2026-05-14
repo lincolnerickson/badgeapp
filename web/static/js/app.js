@@ -286,6 +286,9 @@ const App = {
             this.config = result.config;
             BadgeEditor.updateSize(result.config.badge_width, result.config.badge_height);
             await FieldPanel.refresh();
+            // Refresh the badge-size, PDF, and other inputs so they reflect the
+            // loaded template instead of showing stale values from before load.
+            this.updateUIState();
             Toast.success('Template loaded');
             this.refreshEditor();
         } catch (e) {

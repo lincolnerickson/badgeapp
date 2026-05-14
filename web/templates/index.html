@@ -78,6 +78,9 @@
                     </select>
                     <button id="btn-add-field" disabled>Add</button>
                 </div>
+                <div class="panel-row" style="margin-top:4px">
+                    <button id="btn-add-text" style="width:100%">+ Static Text</button>
+                </div>
             </div>
 
             <div class="panel-section">
@@ -90,6 +93,9 @@
             <div id="field-props" class="panel-section" style="display:none">
                 <h3>Properties</h3>
                 <div class="prop-grid">
+                    <label for="prop-static-text">Static Text</label>
+                    <input type="text" id="prop-static-text" placeholder="(blank = use CSV)">
+
                     <label for="prop-x">X</label>
                     <input type="number" id="prop-x" step="1">
 
@@ -120,7 +126,25 @@
 
                     <label for="prop-max-width">Max Width</label>
                     <input type="number" id="prop-max-width" min="0" step="10">
+
+                    <label for="prop-wrap">Wrap</label>
+                    <input type="checkbox" id="prop-wrap">
+
+                    <label for="prop-line-height">Line Height</label>
+                    <input type="number" id="prop-line-height" min="0.5" max="3" step="0.05" value="1">
                 </div>
+
+                <div class="rules-section">
+                    <div class="rules-header">
+                        <span class="rules-title">Conditional Rules</span>
+                        <button id="btn-add-rule" class="btn-small" type="button">+ Rule</button>
+                    </div>
+                    <div class="rules-help">
+                        If any rule's column starts with <code>Y</code>, that rule's text is rendered (with any trailing text appended). Otherwise the field uses its CSV column.
+                    </div>
+                    <div id="rules-list"></div>
+                </div>
+
                 <button id="btn-apply-props" class="accent" style="margin-top:8px;width:100%">Apply Changes</button>
                 <button id="btn-delete-field" style="margin-top:4px;width:100%">Delete Field</button>
             </div>

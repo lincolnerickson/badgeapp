@@ -2,10 +2,12 @@
 
 import tkinter as tk
 from tkinter import ttk
+from tkinter import font as tkfont
 from PIL import Image, ImageTk
 from typing import List, Optional, Callable
 
 from models.badge_config import BadgeConfig, FieldPlacement
+from export.badge_renderer import resolve_field_text
 from models.csv_data import CSVData
 from utils.image_utils import compute_scale_factor, image_to_canvas, canvas_to_image
 
@@ -41,6 +43,10 @@ class CanvasEditor(ttk.Frame):
         self._drag_field_idx: Optional[int] = None
         self._drag_start_x = 0
         self._drag_start_y = 0
+
+        # Currently selected field (global index), tracked to render placeholders
+        # only for the selected conditional field.
+        self._selected_idx: int = -1
 
         # Tag prefix for field items
         self._field_tag_prefix = "field_"
@@ -168,11 +174,15 @@ class CanvasEditor(ttk.Frame):
 
     def _draw_field(self, idx: int, fp: FieldPlacement):
         """Draw a single field text item on the canvas."""
-        text = fp.csv_column
         if self.csv_data.is_loaded:
-            text = self.csv_data.get_value(self.current_row, fp.csv_column)
-            if not text:
-                text = f"[{fp.csv_column}]"
+            text = resolve_field_text(fp, self.csv_data, self.current_row)
+        else:
+            text = fp.csv_column
+
+        if not text:
+            # Empty field: don't draw text. select_field draws a placeholder rect
+            # for the selected field so it stays grabbable.
+            return
 
         cx, cy = image_to_canvas(fp.x, fp.y, self._scale, self._offset_x, self._offset_y)
 
@@ -183,15 +193,59 @@ class CanvasEditor(ttk.Frame):
         anchor_map = {"left": tk.NW, "center": tk.N, "right": tk.NE}
         anchor = anchor_map.get(fp.alignment, tk.N)
 
+        font_spec = (fp.font_family, display_size, self._get_tk_weight(fp))
         tag = f"{self._field_tag_prefix}{idx}"
-        self.canvas.create_text(
-            cx, cy,
-            text=text,
-            fill=fp.font_color,
-            font=(fp.font_family, display_size, self._get_tk_weight(fp)),
-            anchor=anchor,
-            tags=(tag, "field"),
-        )
+
+        if fp.wrap and fp.max_width > 0:
+            # Manual wrap so we can honor fp.line_height (Tk's native wrap can't
+            # compress line spacing).
+            wrap_width = max(1, int(fp.max_width * self._scale))
+            lines = self._wrap_lines_tk(text, font_spec, wrap_width)
+            # Natural line metric, then apply the multiplier.
+            tk_font = tkfont.Font(family=fp.font_family, size=display_size,
+                                   weight=self._get_tk_weight(fp))
+            natural = tk_font.metrics("linespace")
+            multiplier = fp.line_height if fp.line_height > 0 else 1.0
+            line_step = max(1, int(round(natural * multiplier)))
+            y = cy
+            for line in lines:
+                self.canvas.create_text(
+                    cx, y,
+                    text=line,
+                    fill=fp.font_color,
+                    font=font_spec,
+                    anchor=anchor,
+                    tags=(tag, "field"),
+                )
+                y += line_step
+        else:
+            self.canvas.create_text(
+                cx, cy,
+                text=text,
+                fill=fp.font_color,
+                font=font_spec,
+                anchor=anchor,
+                tags=(tag, "field"),
+            )
+
+    def _wrap_lines_tk(self, text: str, font_spec, max_width: int) -> List[str]:
+        """Greedy word-wrap to fit max_width canvas pixels using a tk font."""
+        family, size, weight = font_spec
+        f = tkfont.Font(family=family, size=size, weight=weight)
+        words = text.split()
+        if not words:
+            return [text]
+        lines: List[str] = []
+        current = words[0]
+        for w in words[1:]:
+            candidate = current + " " + w
+            if f.measure(candidate) <= max_width:
+                current = candidate
+            else:
+                lines.append(current)
+                current = w
+        lines.append(current)
+        return lines
 
     def _get_tk_weight(self, fp: FieldPlacement) -> str:
         parts = []
@@ -203,6 +257,14 @@ class CanvasEditor(ttk.Frame):
 
     def select_field(self, idx: int):
         """Highlight a field on the canvas."""
+        # Track selection so _draw_field can show a placeholder for empty conditional fields.
+        prev = self._selected_idx
+        self._selected_idx = idx if 0 <= idx < len(self.config.fields) else -1
+        # If we changed which conditional field is "selected", redraw so the previous
+        # one disappears and the new one's placeholder appears.
+        if prev != self._selected_idx:
+            self.refresh()
+
         # Remove previous highlights
         self.canvas.delete("highlight")
         if idx < 0 or idx >= len(self.config.fields):
@@ -215,6 +277,28 @@ class CanvasEditor(ttk.Frame):
                 bbox[0] - pad, bbox[1] - pad,
                 bbox[2] + pad, bbox[3] + pad,
                 outline="#0078D7", width=2, tags="highlight",
+            )
+        else:
+            # Empty field (no text drawn). Show a placeholder-sized dashed rect
+            # so the user can still see and drag it. Tagged with the field tag
+            # so drag-detection in _on_press still finds it.
+            fp = self.config.fields[idx]
+            cx, cy = image_to_canvas(fp.x, fp.y, self._scale,
+                                      self._offset_x, self._offset_y)
+            dpi_scale = self.config.dpi / 72.0
+            height = max(12, int(fp.font_size * dpi_scale * self._scale)) + 8
+            width = max(60, fp.max_width or 120) * self._scale
+            align = fp.alignment or "center"
+            if align == "center":
+                x0 = cx - width / 2
+            elif align == "right":
+                x0 = cx - width
+            else:
+                x0 = cx
+            self.canvas.create_rectangle(
+                x0, cy - 2, x0 + width, cy - 2 + height,
+                outline="#0078D7", width=2, dash=(4, 2),
+                tags=(tag, "field", "highlight"),
             )
 
     # ------------------------------------------------------------------

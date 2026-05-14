@@ -23,7 +23,7 @@ app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if app_dir not in sys.path:
     sys.path.insert(0, app_dir)
 
-from models.badge_config import BadgeConfig, FieldPlacement
+from models.badge_config import BadgeConfig, FieldPlacement, ConditionalRule
 from models.csv_data import CSVData
 from export.badge_renderer import render_badge
 from export.pdf_export import export_pdf
@@ -51,6 +51,7 @@ def auth_check():
 FIELD_ALLOWED_KEYS = {
     "x", "y", "font_family", "font_size", "font_color",
     "bold", "italic", "alignment", "max_width", "side",
+    "csv_column", "rules", "static_text", "wrap", "line_height",
 }
 
 # Temp directory for uploads and exports
@@ -285,7 +286,11 @@ def update_field(idx):
     data = request.get_json()
     fp = state.config.fields[idx]
     for key, val in data.items():
-        if key in FIELD_ALLOWED_KEYS:
+        if key not in FIELD_ALLOWED_KEYS:
+            continue
+        if key == "rules":
+            fp.rules = [ConditionalRule.from_dict(r) for r in (val or [])]
+        else:
             setattr(fp, key, val)
     return jsonify(ok=True, field=fp.to_dict())
 

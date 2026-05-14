@@ -19,9 +19,14 @@ def _get_page_size(name: str):
     return A4 if name.lower() == "a4" else letter
 
 
-def _place_badge(c, badge_img, col, row_on_page, margin, cell_w, cell_h,
-                 draw_w, draw_h, spacing, page_h):
-    """Draw a rendered badge image at the given grid position on the PDF."""
+def _place_badge(c, badge_img, col, row_on_page, x_start, y_top,
+                 draw_w, draw_h, spacing):
+    """Draw a rendered badge image at the given grid position on the PDF.
+
+    `x_start` is the PDF x coordinate of the left edge of column 0.
+    `y_top` is the PDF y coordinate of the top edge of row 0.
+    Badges are placed adjacent with exactly `spacing` between them.
+    """
     # Composite onto white to avoid transparent areas rendering as black
     if badge_img.mode == "RGBA":
         white_bg = Image.new("RGBA", badge_img.size, (255, 255, 255, 255))
@@ -33,8 +38,8 @@ def _place_badge(c, badge_img, col, row_on_page, margin, cell_w, cell_h,
     badge_img.save(img_buffer, format="PNG")
     img_buffer.seek(0)
 
-    x = margin + col * (cell_w + spacing) + (cell_w - draw_w) / 2
-    y = page_h - margin - (row_on_page + 1) * cell_h - row_on_page * spacing + (cell_h - draw_h) / 2
+    x = x_start + col * (draw_w + spacing)
+    y = y_top - draw_h - row_on_page * (draw_h + spacing)
 
     c.drawImage(ImageReader(img_buffer), x, y, draw_w, draw_h)
 
@@ -67,20 +72,24 @@ def export_pdf(
     cols = config.badges_per_row
     rows = config.badges_per_col
 
-    # Cell size (badge + spacing)
-    cell_w = (usable_w - (cols - 1) * spacing) / cols
-    cell_h = (usable_h - (rows - 1) * spacing) / rows
+    # Draw each badge at its configured physical size (badge_width pixels /
+    # config.dpi inches * 72 points-per-inch). Lay them out adjacent with
+    # exactly `spacing` between, and scale the whole grid down if it doesn't
+    # fit in the usable area (preserves aspect ratio).
+    target_w = config.badge_width / max(config.dpi, 1) * 72.0
+    target_h = config.badge_height / max(config.dpi, 1) * 72.0
 
-    # Scale badge to fit cell while preserving aspect ratio
-    badge_aspect = config.badge_width / max(config.badge_height, 1)
-    cell_aspect = cell_w / max(cell_h, 1)
+    grid_w = cols * target_w + max(0, cols - 1) * spacing
+    grid_h = rows * target_h + max(0, rows - 1) * spacing
+    scale = min(1.0, usable_w / max(grid_w, 1), usable_h / max(grid_h, 1))
+    draw_w = target_w * scale
+    draw_h = target_h * scale
 
-    if badge_aspect > cell_aspect:
-        draw_w = cell_w
-        draw_h = cell_w / badge_aspect
-    else:
-        draw_h = cell_h
-        draw_w = cell_h * badge_aspect
+    # Center the whole grid on the page so duplex front/back stay aligned.
+    final_grid_w = cols * draw_w + max(0, cols - 1) * spacing
+    final_grid_h = rows * draw_h + max(0, rows - 1) * spacing
+    x_start = (page_w - final_grid_w) / 2
+    y_top = page_h - (page_h - final_grid_h) / 2
 
     badges_per_page = cols * rows
     total_rows = csv_data.row_count
@@ -103,8 +112,8 @@ def export_pdf(
             page_idx = i - page_start
             col = page_idx % cols
             row_on_page = page_idx // cols
-            _place_badge(c, badge_img, col, row_on_page, margin, cell_w, cell_h,
-                         draw_w, draw_h, spacing, page_h)
+            _place_badge(c, badge_img, col, row_on_page, x_start, y_top,
+                         draw_w, draw_h, spacing)
             progress_count += 1
             if on_progress:
                 on_progress(progress_count)
@@ -123,8 +132,8 @@ def export_pdf(
                 col = page_idx % cols
                 row_on_page = page_idx // cols
                 mirrored_col = cols - 1 - col
-                _place_badge(c, badge_img, mirrored_col, row_on_page, margin, cell_w, cell_h,
-                             draw_w, draw_h, spacing, page_h)
+                _place_badge(c, badge_img, mirrored_col, row_on_page, x_start, y_top,
+                             draw_w, draw_h, spacing)
                 progress_count += 1
                 if on_progress:
                     on_progress(progress_count)

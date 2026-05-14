@@ -84,6 +84,33 @@ const BadgeEditor = {
     },
 
     /**
+     * Resolve the display text for a field, mirroring the server-side renderer.
+     * Honors conditional rules: first rule whose cell starts with 'Y' wins;
+     * any text after the leading Y is appended with a space.
+     */
+    resolveFieldText(field, rowData) {
+        if (field.static_text) return field.static_text;
+        const rules = field.rules || [];
+        if (rules.length === 0) {
+            // No rules — show the row value if loaded, otherwise the column name as a placeholder.
+            return (rowData[field.csv_column] !== undefined ? rowData[field.csv_column] : field.csv_column) || '';
+        }
+        for (const rule of rules) {
+            const cell = (rowData[rule.column] || '').trim();
+            const mode = rule.match || 'y';
+            if (mode === 'non_dash') {
+                if (!cell || cell === '-') continue;
+                return rule.text ? `${rule.text} ${cell}`.trim() : cell;
+            }
+            // default 'y'
+            if (!cell || cell[0] !== 'Y') continue;
+            const trailing = cell.slice(1).trim();
+            return trailing ? `${rule.text} ${trailing}`.trimEnd() : rule.text;
+        }
+        return '';
+    },
+
+    /**
      * Full refresh: rebuild SVG fields and update preview.
      */
     async refresh() {
@@ -112,7 +139,7 @@ const BadgeEditor = {
         const currentSide = App.currentSide || 'front';
         fields.forEach((field, idx) => {
             if ((field.side || 'front') !== currentSide) return;
-            const text = rowData[field.csv_column] || field.csv_column;
+            const text = this.resolveFieldText(field, rowData);
             const el = this.createFieldElement(field, idx, text);
             this.fieldsGroup.appendChild(el);
         });
@@ -135,57 +162,138 @@ const BadgeEditor = {
         g.dataset.fieldIndex = idx;
         g.classList.add('svg-field-text');
 
-        const text = document.createElementNS(NS, 'text');
-        text.setAttribute('x', field.x);
-        text.setAttribute('y', field.y);
-        text.setAttribute('fill', field.font_color || '#000000');
-        // Scale font size from points to badge pixels: points * (dpi / 72)
         const dpi = (App.config && App.config.dpi) || 300;
         const pixelSize = Math.round((field.font_size || 24) * dpi / 72);
-        text.setAttribute('font-size', pixelSize);
-        text.setAttribute('font-family', field.font_family || 'Arial');
-
-        if (field.bold) text.setAttribute('font-weight', 'bold');
-        if (field.italic) text.setAttribute('font-style', 'italic');
-
-        // Alignment -> text-anchor
         const anchorMap = { left: 'start', center: 'middle', right: 'end' };
-        text.setAttribute('text-anchor', anchorMap[field.alignment] || 'middle');
-        text.setAttribute('dominant-baseline', 'hanging');
+        const isSelected = idx === FieldPanel.selectedIndex;
+        const isEmpty = !displayText;
 
-        text.textContent = displayText;
-        g.appendChild(text);
+        if (!isEmpty) {
+            const lines = (field.wrap && field.max_width > 0)
+                ? this._wrapTextSVG(displayText, field, pixelSize)
+                : [displayText];
 
-        // Selection highlight
-        if (idx === FieldPanel.selectedIndex) {
+            // Approximate line height from font size (matches PIL's ascent+descent).
+            const multiplier = (field.line_height && field.line_height > 0) ? field.line_height : 1.0;
+            const lineHeight = Math.round(pixelSize * 1.2 * multiplier);
+
+            const text = document.createElementNS(NS, 'text');
+            text.setAttribute('x', field.x);
+            text.setAttribute('y', field.y);
+            text.setAttribute('fill', field.font_color || '#000000');
+            text.setAttribute('font-size', pixelSize);
+            text.setAttribute('font-family', field.font_family || 'Arial');
+            if (field.bold) text.setAttribute('font-weight', 'bold');
+            if (field.italic) text.setAttribute('font-style', 'italic');
+            text.setAttribute('text-anchor', anchorMap[field.alignment] || 'middle');
+            // Use the em-box top (ascender line) as the y origin so the SVG
+            // editor preview matches the PIL renderer's "a" anchor.
+            text.setAttribute('dominant-baseline', 'text-before-edge');
+
+            lines.forEach((line, i) => {
+                const tspan = document.createElementNS(NS, 'tspan');
+                tspan.setAttribute('x', field.x);
+                tspan.setAttribute('dy', i === 0 ? 0 : lineHeight);
+                tspan.textContent = line;
+                text.appendChild(tspan);
+            });
+            g.appendChild(text);
+        }
+
+        // Selection highlight: dashed outline. If the field has no visible text
+        // (e.g. an empty conditional field), draw a placeholder-sized rect so it
+        // stays grabbable without polluting the rendered badge with fake text.
+        if (isSelected) {
             g.classList.add('selected');
-            // Draw selection box
-            const bbox = { x: field.x - 2, y: field.y - 2, width: 100, height: field.font_size + 4 };
             const rect = document.createElementNS(NS, 'rect');
-            rect.setAttribute('x', bbox.x);
-            rect.setAttribute('y', bbox.y);
-            rect.setAttribute('width', bbox.width);
-            rect.setAttribute('height', bbox.height);
             rect.setAttribute('fill', 'none');
             rect.setAttribute('stroke', '#0078D4');
             rect.setAttribute('stroke-width', '2');
             rect.setAttribute('stroke-dasharray', '4,2');
-            rect.setAttribute('pointer-events', 'none');
-            g.appendChild(rect);
 
-            // Fix rect size after text renders
-            requestAnimationFrame(() => {
-                try {
-                    const tb = text.getBBox();
-                    rect.setAttribute('x', tb.x - 4);
-                    rect.setAttribute('y', tb.y - 2);
-                    rect.setAttribute('width', tb.width + 8);
-                    rect.setAttribute('height', tb.height + 4);
-                } catch (e) {}
-            });
+            if (isEmpty) {
+                // Placeholder rect — center-aligned around the field's anchor.
+                const phWidth = Math.max(60, field.max_width || 100);
+                const phHeight = pixelSize + 8;
+                const align = field.alignment || 'center';
+                let rx = field.x;
+                if (align === 'center') rx = field.x - phWidth / 2;
+                else if (align === 'right') rx = field.x - phWidth;
+                rect.setAttribute('x', rx);
+                rect.setAttribute('y', field.y - 2);
+                rect.setAttribute('width', phWidth);
+                rect.setAttribute('height', phHeight);
+                rect.setAttribute('pointer-events', 'all');
+                rect.style.cursor = 'move';
+            } else {
+                rect.setAttribute('x', field.x - 2);
+                rect.setAttribute('y', field.y - 2);
+                rect.setAttribute('width', 100);
+                rect.setAttribute('height', pixelSize + 4);
+                rect.setAttribute('pointer-events', 'none');
+
+                requestAnimationFrame(() => {
+                    try {
+                        const textEl = g.querySelector('text');
+                        const tb = textEl.getBBox();
+                        rect.setAttribute('x', tb.x - 4);
+                        rect.setAttribute('y', tb.y - 2);
+                        rect.setAttribute('width', tb.width + 8);
+                        rect.setAttribute('height', tb.height + 4);
+                    } catch (e) {}
+                });
+            }
+            g.appendChild(rect);
         }
 
         return g;
+    },
+
+    /**
+     * Measure a string in SVG without a visible text element.
+     */
+    _measureText(str, fontSize, fontFamily, bold, italic) {
+        if (!this._measureSvg) {
+            const NS = 'http://www.w3.org/2000/svg';
+            this._measureSvg = document.createElementNS(NS, 'svg');
+            this._measureSvg.style.position = 'absolute';
+            this._measureSvg.style.visibility = 'hidden';
+            this._measureSvg.style.pointerEvents = 'none';
+            this._measureText_el = document.createElementNS(NS, 'text');
+            this._measureSvg.appendChild(this._measureText_el);
+            document.body.appendChild(this._measureSvg);
+        }
+        const t = this._measureText_el;
+        t.setAttribute('font-size', fontSize);
+        t.setAttribute('font-family', fontFamily || 'Arial');
+        t.setAttribute('font-weight', bold ? 'bold' : 'normal');
+        t.setAttribute('font-style', italic ? 'italic' : 'normal');
+        t.textContent = str;
+        return t.getComputedTextLength();
+    },
+
+    /**
+     * Greedy word-wrap to fit max_width (in badge pixels at full DPI). Returns
+     * an array of line strings.
+     */
+    _wrapTextSVG(text, field, pixelSize) {
+        const words = text.split(/\s+/).filter(Boolean);
+        if (words.length === 0) return [text];
+        const lines = [];
+        let current = words[0];
+        for (let i = 1; i < words.length; i++) {
+            const candidate = current + ' ' + words[i];
+            const w = this._measureText(candidate, pixelSize, field.font_family,
+                                         field.bold, field.italic);
+            if (w <= field.max_width) {
+                current = candidate;
+            } else {
+                lines.push(current);
+                current = words[i];
+            }
+        }
+        lines.push(current);
+        return lines;
     },
 
     // --- Drag and drop ---

@@ -7,11 +7,20 @@ const FieldPanel = {
 
     init() {
         document.getElementById('btn-add-field').addEventListener('click', () => this.addField());
+        document.getElementById('btn-add-text').addEventListener('click', () => this.addStaticTextField());
         document.getElementById('btn-apply-props').addEventListener('click', () => this.applyProps());
         document.getElementById('btn-delete-field').addEventListener('click', () => this.deleteSelected());
+        document.getElementById('btn-add-rule').addEventListener('click', () => this.addRule());
 
         // Load initial fields
         this.refresh();
+    },
+
+    _csvHeaders() {
+        const sel = document.getElementById('csv-column-select');
+        return Array.from(sel.options)
+            .map(o => o.value)
+            .filter(v => v !== '');
     },
 
     populateColumns(headers) {
@@ -67,8 +76,16 @@ const FieldPanel = {
             this._filteredToGlobal.push(idx);
             const item = document.createElement('div');
             item.className = 'field-item' + (idx === this.selectedIndex ? ' selected' : '');
+            let label;
+            if (f.static_text) {
+                label = `"${f.static_text}"`;
+            } else if ((f.rules || []).length > 0) {
+                label = `${f.csv_column || 'conditional'} (conditional)`;
+            } else {
+                label = f.csv_column;
+            }
             item.innerHTML = `
-                <span class="field-name">${escapeHTML(f.csv_column)}</span>
+                <span class="field-name">${escapeHTML(label)}</span>
                 <span class="field-info">${escapeHTML(f.font_family)} ${f.font_size}px</span>
             `;
             item.addEventListener('click', () => this.select(idx));
@@ -99,6 +116,7 @@ const FieldPanel = {
         }
         panel.style.display = '';
         const f = this.fields[this.selectedIndex];
+        document.getElementById('prop-static-text').value = f.static_text || '';
         document.getElementById('prop-x').value = Math.round(f.x);
         document.getElementById('prop-y').value = Math.round(f.y);
         document.getElementById('prop-font').value = f.font_family;
@@ -108,6 +126,94 @@ const FieldPanel = {
         document.getElementById('prop-italic').checked = f.italic;
         document.getElementById('prop-align').value = f.alignment || 'center';
         document.getElementById('prop-max-width').value = f.max_width || 0;
+        document.getElementById('prop-wrap').checked = !!f.wrap;
+        document.getElementById('prop-line-height').value = f.line_height || 1.0;
+        this.renderRules(f.rules || []);
+    },
+
+    renderRules(rules) {
+        const list = document.getElementById('rules-list');
+        list.innerHTML = '';
+        const headers = this._csvHeaders();
+        rules.forEach((rule, i) => list.appendChild(this._buildRuleRow(rule, i, headers)));
+    },
+
+    _buildRuleRow(rule, index, headers) {
+        const row = document.createElement('div');
+        row.className = 'rule-row';
+        row.dataset.index = index;
+
+        const colSel = document.createElement('select');
+        colSel.className = 'rule-column';
+        const blank = document.createElement('option');
+        blank.value = '';
+        blank.textContent = '-- column --';
+        colSel.appendChild(blank);
+        headers.forEach(h => {
+            const opt = document.createElement('option');
+            opt.value = h;
+            opt.textContent = h;
+            if (h === rule.column) opt.selected = true;
+            colSel.appendChild(opt);
+        });
+        if (rule.column && !headers.includes(rule.column)) {
+            const opt = document.createElement('option');
+            opt.value = rule.column;
+            opt.textContent = rule.column + ' (missing)';
+            opt.selected = true;
+            colSel.appendChild(opt);
+        }
+
+        const matchSel = document.createElement('select');
+        matchSel.className = 'rule-match';
+        const optY = document.createElement('option');
+        optY.value = 'y';
+        optY.textContent = 'starts with Y';
+        const optND = document.createElement('option');
+        optND.value = 'non_dash';
+        optND.textContent = 'not - / blank';
+        matchSel.appendChild(optY);
+        matchSel.appendChild(optND);
+        matchSel.value = rule.match || 'y';
+
+        const textInput = document.createElement('input');
+        textInput.type = 'text';
+        textInput.className = 'rule-text';
+        textInput.placeholder = 'Text (prefix)';
+        textInput.value = rule.text || '';
+
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'rule-remove';
+        removeBtn.textContent = '×';
+        removeBtn.title = 'Remove rule';
+        removeBtn.addEventListener('click', () => row.remove());
+
+        row.appendChild(colSel);
+        row.appendChild(matchSel);
+        row.appendChild(textInput);
+        row.appendChild(removeBtn);
+        return row;
+    },
+
+    _readRulesFromUI() {
+        const rows = document.querySelectorAll('#rules-list .rule-row');
+        const rules = [];
+        rows.forEach(row => {
+            const column = row.querySelector('.rule-column').value;
+            const text = row.querySelector('.rule-text').value;
+            const match = row.querySelector('.rule-match').value || 'y';
+            if (column || text) {
+                rules.push({ column, text, match });
+            }
+        });
+        return rules;
+    },
+
+    addRule() {
+        if (this.selectedIndex < 0) return;
+        const list = document.getElementById('rules-list');
+        list.appendChild(this._buildRuleRow({ column: '', text: '' }, list.children.length, this._csvHeaders()));
     },
 
     async updatePropsFromServer(idx) {
@@ -154,10 +260,40 @@ const FieldPanel = {
         }
     },
 
+    async addStaticTextField() {
+        const x = Math.round(App.config?.badge_width / 2) || 525;
+        const y = Math.round(App.config?.badge_height / 2) || 300;
+        try {
+            const result = await API.addField({
+                csv_column: '',
+                static_text: 'Text',
+                x: x,
+                y: y,
+                font_family: 'Arial',
+                font_size: 24,
+                font_color: '#000000',
+                bold: false,
+                italic: false,
+                alignment: 'center',
+                max_width: 0,
+                side: App.currentSide || 'front',
+            });
+            if (result.ok) {
+                this.selectedIndex = result.index;
+                await this.refresh();
+                await BadgeEditor.refresh();
+                Toast.success('Static text added');
+            }
+        } catch (e) {
+            Toast.error('Failed to add text');
+        }
+    },
+
     async applyProps() {
         if (this.selectedIndex < 0) return;
 
         const data = {
+            static_text: document.getElementById('prop-static-text').value,
             x: parseFloat(document.getElementById('prop-x').value) || 0,
             y: parseFloat(document.getElementById('prop-y').value) || 0,
             font_family: document.getElementById('prop-font').value,
@@ -167,6 +303,9 @@ const FieldPanel = {
             italic: document.getElementById('prop-italic').checked,
             alignment: document.getElementById('prop-align').value,
             max_width: parseInt(document.getElementById('prop-max-width').value) || 0,
+            wrap: document.getElementById('prop-wrap').checked,
+            line_height: parseFloat(document.getElementById('prop-line-height').value) || 1.0,
+            rules: this._readRulesFromUI(),
         };
 
         try {
